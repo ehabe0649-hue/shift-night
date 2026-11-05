@@ -17,9 +17,9 @@
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // بيانات مشروعك الحقيقية
+    // بيانات مشروعك الحقيقية (تم تصحيح المفتاح من صورتك الأخيرة)
     const firebaseConfig = {
-      apiKey: "AIzaSyAgkwoY5Fvpo8_G1CascrQ3T2DqKCjWVyg",
+      apiKey: "AIzaSyAgkwoY5Fvpo8_G1CascrQ3T2DqKCjVVyg",
       authDomain: "shift-night.firebaseapp.com",
       projectId: "shift-night",
       storageBucket: "shift-night.firebasestorage.app",
@@ -45,7 +45,6 @@
       signInAnonymously
     };
 
-    // تشغيل السيرفر بعد تحميل الصفحة لضمان عدم حدوث أخطاء
     window.addEventListener('load', () => {
       setTimeout(() => {
         if (window.initCloudSync) window.initCloudSync();
@@ -117,7 +116,6 @@
       isCloudConnected: false
     };
 
-    // الربط المباشر اللحظي مع السيرفر السحابي
     window.initCloudSync = async function() {
       if (!window.CloudDB) return;
       const { db, auth, appId, collection, onSnapshot, signInAnonymously } = window.CloudDB;
@@ -163,7 +161,6 @@
 
       const app = document.getElementById('app');
       app.innerHTML = `
-        <!-- Header -->
         <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-50 shadow-2xl">
           <div class="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
             <div class="flex items-center space-x-3.5 space-x-reverse">
@@ -178,7 +175,6 @@
             </div>
 
             <div class="flex items-center gap-3">
-              <!-- Theme Switcher -->
               <div class="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
                 <button onclick="setTheme('midnight')" class="p-2 rounded-xl hover:bg-slate-800 text-amber-400 text-xs font-bold transition-all ${state.currentTheme === 'midnight' ? 'bg-slate-800 border border-amber-500/40' : ''}">🌙</button>
                 <button onclick="setTheme('cyber')" class="p-2 rounded-xl hover:bg-slate-800 text-purple-400 text-xs font-bold transition-all ${state.currentTheme === 'cyber' ? 'bg-slate-800 border border-purple-500/40' : ''}">🌌</button>
@@ -333,7 +329,6 @@
               </button>
             </div>
 
-            <!-- الفلاتر -->
             <div class="glass-card p-6 rounded-3xl space-y-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
@@ -379,7 +374,6 @@
               ` : ''}
             </div>
 
-            <!-- الكروت الإحصائية -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div class="glass-card p-6 rounded-3xl border-r-4 border-r-emerald-500">
                 <span class="text-xs font-bold text-slate-400">تحصيلات اليوم الحالي</span>
@@ -396,7 +390,6 @@
               </div>
             </div>
 
-            <!-- Charts -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div class="lg:col-span-2 glass-card p-6 rounded-3xl">
                 <h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>📈</span> أعلى الموظفين تحصيلاً</h3>
@@ -412,7 +405,6 @@
               </div>
             </div>
 
-            <!-- جدول أداء الموظفين -->
             <div class="glass-card rounded-3xl overflow-hidden">
               <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800 flex justify-between items-center">
                 <span>تقرير أداء الموظفين الـ 23</span>
@@ -447,7 +439,6 @@
               </div>
             </div>
 
-            <!-- سجل المعاملات التفصيلي -->
             <div class="glass-card rounded-3xl overflow-hidden">
               <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800">
                 سجل المعاملات المباشرة (${filtered.length} عملية)
