@@ -17,19 +17,18 @@
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // Initialize Firebase Live Cloud Database
-    const firebaseConfig = typeof __firebase_config !== 'undefined' 
-      ? JSON.parse(__firebase_config) 
-      : {
-          apiKey: "demo-api-key",
-          authDomain: "shift-night-app.firebaseapp.com",
-          projectId: "shift-night-app",
-          storageBucket: "shift-night-app.appspot.com",
-          messagingSenderId: "123456789",
-          appId: "1:123456789:web:abcdef"
-        };
+    // بيانات مشروعك الحقيقية
+    const firebaseConfig = {
+      apiKey: "AIzaSyAgkwoY5Fvpo8_G1CascrQ3T2DqKCjWVyg",
+      authDomain: "shift-night.firebaseapp.com",
+      projectId: "shift-night",
+      storageBucket: "shift-night.firebasestorage.app",
+      messagingSenderId: "695940731884",
+      appId: "1:695940731884:web:d4721d29537c6e3ccca6c9",
+      measurementId: "G-PW8FGVNCWR"
+    };
 
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'shift-night-live-db';
+    const appId = 'shift-night-live-db';
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -46,10 +45,12 @@
       signInAnonymously
     };
 
-    // Trigger cloud sync initialization
-    if (window.initCloudSync) {
-      window.initCloudSync();
-    }
+    // تشغيل السيرفر بعد تحميل الصفحة لضمان عدم حدوث أخطاء
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        if (window.initCloudSync) window.initCloudSync();
+      }, 500);
+    });
   </script>
 
   <style>
@@ -59,22 +60,10 @@
       transition: background 0.4s ease, color 0.4s ease;
     }
 
-    body.theme-midnight {
-      background: radial-gradient(circle at top right, #0f172a, #020617 80%);
-      color: #f8fafc;
-    }
-    body.theme-cyber {
-      background: radial-gradient(circle at top right, #090d16, #030712 80%);
-      color: #f1f5f9;
-    }
-    body.theme-espresso {
-      background: radial-gradient(circle at top right, #1c130e, #0c0806 80%);
-      color: #fef3c7;
-    }
-    body.theme-light {
-      background: radial-gradient(circle at top right, #f8fafc, #e2e8f0 80%);
-      color: #0f172a;
-    }
+    body.theme-midnight { background: radial-gradient(circle at top right, #0f172a, #020617 80%); color: #f8fafc; }
+    body.theme-cyber { background: radial-gradient(circle at top right, #090d16, #030712 80%); color: #f1f5f9; }
+    body.theme-espresso { background: radial-gradient(circle at top right, #1c130e, #0c0806 80%); color: #fef3c7; }
+    body.theme-light { background: radial-gradient(circle at top right, #f8fafc, #e2e8f0 80%); color: #0f172a; }
 
     .glass-card {
       background: rgba(15, 23, 42, 0.8);
@@ -89,14 +78,8 @@
       border: 1px solid rgba(0, 0, 0, 0.08);
     }
 
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #334155;
-      border-radius: 9999px;
-    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
   </style>
 </head>
 <body class="theme-midnight min-h-screen custom-scrollbar">
@@ -104,7 +87,6 @@
   <div id="app"></div>
 
   <script>
-    // قائمة الموظفين الـ 23
     const INITIAL_EMPLOYEES = [
       "Mayada Ibrahim", "Mohamed Tarek", "Shahd Mohamed", "Mohamed Emad",
       "Nada Ibrahim", "Nagham Mohammed", "Salsabel Mahmoud", "Ezz Mohamed",
@@ -135,7 +117,7 @@
       isCloudConnected: false
     };
 
-    // الربط المباشر اللحظي مع السيرفر السحابي (مثل جوجل شيت)
+    // الربط المباشر اللحظي مع السيرفر السحابي
     window.initCloudSync = async function() {
       if (!window.CloudDB) return;
       const { db, auth, appId, collection, onSnapshot, signInAnonymously } = window.CloudDB;
@@ -155,25 +137,19 @@
           localStorage.setItem('shift_night_local_fallback', JSON.stringify(cloudData));
           render();
         }, (error) => {
-          console.warn("Cloud live sync falling back to broadcast channel:", error);
+          console.warn("Cloud live sync error:", error);
+          state.isCloudConnected = false;
+          render();
         });
       } catch (err) {
         console.error("Auth / Cloud error:", err);
-      }
-    };
-
-    // الاستماع المحلي للأجهزة التي تفتح نفس الرابط
-    const broadcast = new BroadcastChannel('shift_night_live_channel');
-    broadcast.onmessage = (event) => {
-      if (event.data && event.data.collections) {
-        state.collections = event.data.collections;
+        state.isCloudConnected = false;
         render();
       }
     };
 
     function saveCollectionsLocally() {
       localStorage.setItem('shift_night_local_fallback', JSON.stringify(state.collections));
-      broadcast.postMessage({ collections: state.collections });
     }
 
     function setTheme(themeName) {
@@ -194,9 +170,9 @@
               <div class="w-12 h-12 bg-gradient-to-tr from-amber-500 via-amber-400 to-emerald-400 rounded-2xl flex items-center justify-center text-slate-950 font-black text-2xl shadow-lg shadow-amber-500/20">🌙</div>
               <div>
                 <h1 class="text-xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-emerald-300 to-amber-200">Shift Night Live</h1>
-                <p class="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  ربط متزامن مباشر (Google Sheets Style) 🌐
+                <p class="text-[11px] font-bold ${state.isCloudConnected ? 'text-emerald-400' : 'text-red-400'} flex items-center gap-1">
+                  <span class="w-2 h-2 rounded-full ${state.isCloudConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}"></span>
+                  ${state.isCloudConnected ? 'متصل سحابياً مباشر ✅' : 'وضع محلي فقط ⚠️'}
                 </p>
               </div>
             </div>
@@ -204,10 +180,10 @@
             <div class="flex items-center gap-3">
               <!-- Theme Switcher -->
               <div class="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
-                <button onclick="setTheme('midnight')" title="داكن فاخر" class="p-2 rounded-xl hover:bg-slate-800 text-amber-400 text-xs font-bold transition-all ${state.currentTheme === 'midnight' ? 'bg-slate-800 border border-amber-500/40' : ''}">🌙</button>
-                <button onclick="setTheme('cyber')" title="سيبراني" class="p-2 rounded-xl hover:bg-slate-800 text-purple-400 text-xs font-bold transition-all ${state.currentTheme === 'cyber' ? 'bg-slate-800 border border-purple-500/40' : ''}">🌌</button>
-                <button onclick="setTheme('espresso')" title="إسبريسو" class="p-2 rounded-xl hover:bg-slate-800 text-amber-600 text-xs font-bold transition-all ${state.currentTheme === 'espresso' ? 'bg-slate-800 border border-amber-600/40' : ''}">☕</button>
-                <button onclick="setTheme('light')" title="فاتح نقي" class="p-2 rounded-xl hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all ${state.currentTheme === 'light' ? 'bg-slate-800 border border-slate-400' : ''}">☀️</button>
+                <button onclick="setTheme('midnight')" class="p-2 rounded-xl hover:bg-slate-800 text-amber-400 text-xs font-bold transition-all ${state.currentTheme === 'midnight' ? 'bg-slate-800 border border-amber-500/40' : ''}">🌙</button>
+                <button onclick="setTheme('cyber')" class="p-2 rounded-xl hover:bg-slate-800 text-purple-400 text-xs font-bold transition-all ${state.currentTheme === 'cyber' ? 'bg-slate-800 border border-purple-500/40' : ''}">🌌</button>
+                <button onclick="setTheme('espresso')" class="p-2 rounded-xl hover:bg-slate-800 text-amber-600 text-xs font-bold transition-all ${state.currentTheme === 'espresso' ? 'bg-slate-800 border border-amber-600/40' : ''}">☕</button>
+                <button onclick="setTheme('light')" class="p-2 rounded-xl hover:bg-slate-800 text-slate-300 text-xs font-bold transition-all ${state.currentTheme === 'light' ? 'bg-slate-800 border border-slate-400' : ''}">☀️</button>
               </div>
 
               ${state.currentView === 'employee' ? `
@@ -554,11 +530,7 @@
                 borderRadius: 8
               }]
             },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { display: false } }
-            }
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
           });
         }
 
@@ -574,15 +546,9 @@
             type: 'doughnut',
             data: {
               labels: Object.keys(paymentCounts),
-              datasets: [{
-                data: Object.values(paymentCounts),
-                backgroundColor: ['#10b981', '#3b82f6', '#64748b']
-              }]
+              datasets: [{ data: Object.values(paymentCounts), backgroundColor: ['#10b981', '#3b82f6', '#64748b'] }]
             },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false
-            }
+            options: { responsive: true, maintainAspectRatio: false }
           });
         }
       }, 100);
