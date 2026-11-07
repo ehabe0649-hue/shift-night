@@ -5,19 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Shift Night - نظام إدارة وتحصيل المبالغ السحابي</title>
   
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- Firebase Live Real-time Database Integration -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // بيانات مشروعك الحقيقية
     const firebaseConfig = {
       apiKey: "AIzaSyAgkwoY5Fvpo8_G1CascrQ3T2DqKCjVVyg",
       authDomain: "shift-night.firebaseapp.com",
@@ -35,7 +30,7 @@
 
     window.CloudDB = {
       db, auth, appId, collection, addDoc, onSnapshot, deleteDoc, doc, query, setDoc, getDoc,
-      signInAnonymously: signInAnonymously 
+      signInAnonymously: signInAnonymously
     };
 
     window.addEventListener('load', () => {
@@ -47,57 +42,26 @@
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
-    body {
-      font-family: 'Cairo', sans-serif;
-      transition: background 0.4s ease, color 0.4s ease;
-    }
-
+    body { font-family: 'Cairo', sans-serif; transition: background 0.4s ease, color 0.4s ease; }
     body.theme-midnight { background: radial-gradient(circle at top right, #0f172a, #020617 80%); color: #f8fafc; }
     body.theme-cyber { background: radial-gradient(circle at top right, #090d16, #030712 80%); color: #f1f5f9; }
     body.theme-espresso { background: radial-gradient(circle at top right, #1c130e, #0c0806 80%); color: #fef3c7; }
     body.theme-light { background: radial-gradient(circle at top right, #f8fafc, #e2e8f0 80%); color: #0f172a; }
-
-    .glass-card {
-      background: rgba(15, 23, 42, 0.8);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      transition: all 0.3s ease;
-    }
-
-    body.theme-light .glass-card {
-      background: rgba(255, 255, 255, 0.9);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(0, 0, 0, 0.08);
-    }
-
+    .glass-card { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); transition: all 0.3s ease; }
+    body.theme-light .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(0, 0, 0, 0.08); }
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
-
-    @keyframes marquee {
-      0% { transform: translateX(100%); }
-      100% { transform: translateX(-100%); }
-    }
-    .ticker-wrap {
-      width: 100%;
-      overflow: hidden;
-      background: #b45309;
-      color: white;
-      padding: 10px 0;
-      box-sizing: content-box;
-    }
-    .ticker {
-      display: inline-block;
-      white-space: nowrap;
-      padding-right: 100%;
-      animation: marquee 20s linear infinite;
-      font-weight: bold;
-      font-size: 1.1rem;
-    }
+    
+    @keyframes marquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+    .ticker-wrap { width: 100%; overflow: hidden; background: #b45309; color: white; padding: 10px 0; box-sizing: content-box; }
+    .ticker { display: inline-block; white-space: nowrap; padding-right: 100%; animation: marquee 50s linear infinite; font-weight: bold; font-size: 1.1rem; }
   </style>
 </head>
 <body class="theme-midnight min-h-screen custom-scrollbar">
 
   <div id="app"></div>
+
+  <audio id="notificationSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
 
   <script>
     const INITIAL_EMPLOYEES = [
@@ -109,15 +73,8 @@
     ];
 
     const getTodayString = () => new Date().toISOString().split('T')[0];
-
-    const formatCurrency = (val) => {
-      return (Number(val) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    };
-
-    const getEmployeeImage = (name) => {
-      const formattedName = name.replace(/ /g, '_');
-      return `https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/${formattedName}.jpg`;
-    };
+    const formatCurrency = (val) => (Number(val) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const getEmployeeImage = (name) => `https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/${name.replace(/ /g, '_')}.jpg`;
 
     const getHeroData = () => {
       const today = new Date();
@@ -125,33 +82,37 @@
       const todayStr = getTodayString();
       const monthStr = getTodayString().slice(0, 7);
 
-      let isMonthlyMode = dayOfMonth >= 21;
-      let relevantCollections = [];
-
-      if (isMonthlyMode) {
-        relevantCollections = state.collections.filter(c => c.date.startsWith(monthStr));
-      } else {
-        relevantCollections = state.collections.filter(c => c.date === todayStr);
+      // لو يوم 30، نعرض صورة التيم ليدر
+      if (dayOfMonth === 30) {
+        return { name: "Mohamed Maher", amount: 0, isMonthly: false, isLeader: true };
       }
+
+      let isMonthlyMode = dayOfMonth >= 21;
+      let relevantCollections = isMonthlyMode 
+        ? state.collections.filter(c => c.date.startsWith(monthStr))
+        : state.collections.filter(c => c.date === todayStr);
 
       if (relevantCollections.length === 0) return null;
 
       const totalsByEmp = {};
+      const notesByEmp = {};
       relevantCollections.forEach(c => {
-        if (!totalsByEmp[c.employeeName]) totalsByEmp[c.employeeName] = 0;
+        if (!totalsByEmp[c.employeeName]) { totalsByEmp[c.employeeName] = 0; notesByEmp[c.employeeName] = ''; }
         totalsByEmp[c.employeeName] += c.amount;
+        if (c.notes) notesByEmp[c.employeeName] += ' ' + c.notes;
       });
 
       let heroName = null;
       let maxAmount = 0;
       for (const [name, total] of Object.entries(totalsByEmp)) {
-        if (total > maxAmount) {
-          maxAmount = total;
-          heroName = name;
-        }
+        if (total > maxAmount) { maxAmount = total; heroName = name; }
       }
 
-      return { name: heroName, amount: maxAmount, isMonthly: isMonthlyMode };
+      // التحقق من "سداد ماهر"
+      const heroNotes = notesByEmp[heroName] || '';
+      const isSedadMaher = heroNotes.includes('سداد ماهر');
+
+      return { name: heroName, amount: maxAmount, isMonthly: isMonthlyMode, isSedadMaher: isSedadMaher, isLeader: false };
     };
 
     let state = {
@@ -168,7 +129,17 @@
       searchQuery: '',
       loginError: '',
       employeeSuccessMsg: '',
-      isCloudConnected: false
+      isCloudConnected: false,
+      soundEnabled: localStorage.getItem('shift_night_sound') === 'true'
+    };
+
+    window.toggleSound = function() {
+      state.soundEnabled = !state.soundEnabled;
+      localStorage.setItem('shift_night_sound', state.soundEnabled);
+      if (state.soundEnabled) {
+        document.getElementById('notificationSound').play().catch(e => console.log("Sound play error:", e));
+      }
+      render();
     };
 
     window.initCloudSync = async function() {
@@ -181,10 +152,16 @@
         const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'collections');
         onSnapshot(colRef, (snapshot) => {
           const cloudData = [];
-          snapshot.forEach((docSnap) => {
-            cloudData.push({ id: docSnap.id, ...docSnap.data() });
-          });
+          snapshot.forEach((docSnap) => { cloudData.push({ id: docSnap.id, ...docSnap.data() }); });
           cloudData.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+          
+          // تشغيل الصوت لو فيه إضافة جديدة
+          if (state.collections.length > 0 && cloudData.length > 0 && cloudData[0].id !== state.collections[0].id) {
+            if (state.soundEnabled) {
+              document.getElementById('notificationSound').play().catch(e => console.log("Sound error:", e));
+            }
+          }
+
           state.collections = cloudData;
           state.isCloudConnected = true;
           localStorage.setItem('shift_night_local_fallback', JSON.stringify(cloudData));
@@ -211,35 +188,23 @@
       }
     };
 
-    function saveCollectionsLocally() {
-      localStorage.setItem('shift_night_local_fallback', JSON.stringify(state.collections));
-    }
-
-    function setTheme(themeName) {
-      state.currentTheme = themeName;
-      localStorage.setItem('shift_night_theme', themeName);
-      render();
-    }
+    function saveCollectionsLocally() { localStorage.setItem('shift_night_local_fallback', JSON.stringify(state.collections)); }
+    function setTheme(themeName) { state.currentTheme = themeName; localStorage.setItem('shift_night_theme', themeName); render(); }
 
     window.updateNewsTicker = async function(text, active) {
       if (!window.CloudDB) return;
       const { db, appId, doc, setDoc } = window.CloudDB;
       const tickerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'news_ticker');
-      
       try {
         await setDoc(tickerDocRef, { text: text, active: active }, { merge: true });
         state.newsTicker = text;
         state.isTickerActive = active;
         render();
-      } catch (err) {
-        console.error("Error updating ticker:", err);
-        alert("حدث خطأ أثناء تحديث النشرة");
-      }
+      } catch (err) { console.error("Error updating ticker:", err); alert("حدث خطأ أثناء تحديث النشرة"); }
     };
 
     function render() {
       document.body.className = `theme-${state.currentTheme} min-h-screen custom-scrollbar`;
-
       const app = document.getElementById('app');
       app.innerHTML = `
         <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 sticky top-0 z-50 shadow-2xl">
@@ -256,6 +221,10 @@
             </div>
 
             <div class="flex items-center gap-3">
+              <button onclick="toggleSound()" class="px-3 py-2 rounded-xl text-xs font-bold transition-all ${state.soundEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 border border-slate-700'}">
+                ${state.soundEnabled ? '🔔 الإشعارات شغالة' : '🔕 تشغيل الإشعارات'}
+              </button>
+              
               <div class="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
                 <button onclick="setTheme('midnight')" class="p-2 rounded-xl hover:bg-slate-800 text-amber-400 text-xs font-bold transition-all ${state.currentTheme === 'midnight' ? 'bg-slate-800 border border-amber-500/40' : ''}">🌙</button>
                 <button onclick="setTheme('cyber')" class="p-2 rounded-xl hover:bg-slate-800 text-purple-400 text-xs font-bold transition-all ${state.currentTheme === 'cyber' ? 'bg-slate-800 border border-purple-500/40' : ''}">🌌</button>
@@ -280,13 +249,7 @@
             </div>
           </div>
           
-          ${state.isTickerActive && state.newsTicker ? `
-            <div class="ticker-wrap">
-              <div class="ticker">
-                📢 ${state.newsTicker} 📢
-              </div>
-            </div>
-          ` : ''}
+          ${state.isTickerActive && state.newsTicker ? `<div class="ticker-wrap"><div class="ticker">📢 ${state.newsTicker} 📢</div></div>` : ''}
         </header>
 
         <main class="max-w-7xl mx-auto px-4 py-8">
@@ -295,39 +258,54 @@
         </main>
       `;
 
-      if (state.currentView === 'admin_dashboard' && state.isAdminLoggedIn) {
-        initCharts();
-      }
+      if (state.currentView === 'admin_dashboard' && state.isAdminLoggedIn) initCharts();
     }
 
     function renderHero() {
       const hero = getHeroData();
       if (!hero) return '';
 
+      if (hero.isLeader) {
+        return `
+          <div class="mb-8 relative overflow-hidden glass-card rounded-3xl p-6 sm:p-8 border-2 border-amber-500/50 shadow-[0_0_40px_rgba(245,158,11,0.2)] bg-gradient-to-br from-slate-900 via-slate-900 to-amber-900/20">
+            <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 font-black text-xs px-4 py-1.5 rounded-bl-2xl shadow-lg z-10">LEADER APPRECIATION</div>
+            <div class="flex flex-col sm:flex-row items-center gap-6 relative z-0">
+              <div class="relative shrink-0">
+                <div class="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] overflow-hidden bg-slate-800 flex items-center justify-center">
+                  <img src="${getEmployeeImage(hero.name)}" alt="${hero.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
+                </div>
+              </div>
+              <div class="text-center sm:text-right flex-1">
+                <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">Thank You For Your Leadership</p>
+                <h2 class="text-3xl font-black text-white mb-2" dir="ltr">${hero.name}</h2>
+                <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">"Your guidance lights our way every night! 🌟"</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       const title = hero.isMonthly ? "CHAMPION OF THE MONTH" : "HERO OF THE DAY";
       const subtitle = hero.isMonthly ? "أعلى إجمالي تحصيل من أول الشهر" : "أعلى تحصيل لليوم";
+      const imageName = hero.isSedadMaher ? "Mohamed Maher" : hero.name;
+      const displayName = hero.name;
 
       return `
         <div class="mb-8 relative overflow-hidden glass-card rounded-3xl p-6 sm:p-8 border-2 border-amber-500/50 shadow-[0_0_40px_rgba(245,158,11,0.2)] bg-gradient-to-br from-slate-900 via-slate-900 to-amber-900/20">
-          <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 font-black text-xs px-4 py-1.5 rounded-bl-2xl shadow-lg z-10">
-            ${title}
-          </div>
-          
+          <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 font-black text-xs px-4 py-1.5 rounded-bl-2xl shadow-lg z-10">${title}</div>
           <div class="flex flex-col sm:flex-row items-center gap-6 relative z-0">
             <div class="relative shrink-0">
               <div class="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] overflow-hidden bg-slate-800 flex items-center justify-center">
-                <img src="${getEmployeeImage(hero.name)}" alt="${hero.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
+                <img src="${getEmployeeImage(imageName)}" alt="${displayName}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
               </div>
               <div class="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 font-black text-xl w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 shadow-lg">1</div>
             </div>
-
             <div class="text-center sm:text-right flex-1">
               <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">${subtitle}</p>
-              <h2 class="text-3xl font-black text-white mb-2" dir="ltr">${hero.name}</h2>
+              <h2 class="text-3xl font-black text-white mb-2" dir="ltr">${displayName}</h2>
+              ${hero.isSedadMaher ? `<p class="text-emerald-400 font-bold text-sm mb-1">🏆 سداد ماهر - Mohamed Maher</p>` : ''}
               <p class="text-emerald-400 font-black text-xl mb-3" dir="ltr">${formatCurrency(hero.amount)} EGP</p>
-              <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">
-                "Champions keep playing until they get it right. Keep going! 🚀"
-              </p>
+              <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">"Champions keep playing until they get it right. Keep going! 🚀"</p>
             </div>
           </div>
         </div>
@@ -337,13 +315,8 @@
     window.handlePaymentTypeChange = function() {
       const type = document.getElementById('empPaymentType').value;
       const dateDiv = document.getElementById('dateDiv');
-      if (type === 'غير معروف') {
-        dateDiv.style.display = 'none';
-        document.getElementById('empDate').required = false;
-      } else {
-        dateDiv.style.display = 'block';
-        document.getElementById('empDate').required = true;
-      }
+      if (type === 'غير معروف') { dateDiv.style.display = 'none'; document.getElementById('empDate').required = false; }
+      else { dateDiv.style.display = 'block'; document.getElementById('empDate').required = true; }
     };
 
     function renderContent() {
@@ -351,19 +324,11 @@
         return `
           <div class="max-w-xl mx-auto glass-card rounded-3xl shadow-2xl p-6 sm:p-10 relative border border-slate-800">
             <div class="text-center pb-6 border-b border-slate-800/80 mb-6">
-              <span class="inline-block bg-emerald-500/10 text-emerald-400 text-[11px] font-extrabold px-3 py-1 rounded-full border border-emerald-500/20 mb-3">
-                ● الرابط التفاعلي المباشر
-              </span>
+              <span class="inline-block bg-emerald-500/10 text-emerald-400 text-[11px] font-extrabold px-3 py-1 rounded-full border border-emerald-500/20 mb-3">● الرابط التفاعلي المباشر</span>
               <h2 class="text-2xl font-black text-slate-100">إدخال مبلغ التحصيل</h2>
               <p class="text-xs text-slate-400 mt-1">يتم حفظ وإرسال البيانات فوراً للـ Team Leader</p>
             </div>
-
-            ${state.employeeSuccessMsg ? `
-              <div class="mb-6 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 p-4 rounded-2xl text-xs font-bold flex justify-between items-center animate-bounce">
-                <span>✅ ${state.employeeSuccessMsg}</span>
-              </div>
-            ` : ''}
-
+            ${state.employeeSuccessMsg ? `<div class="mb-6 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 p-4 rounded-2xl text-xs font-bold flex justify-between items-center animate-bounce"><span>✅ ${state.employeeSuccessMsg}</span></div>` : ''}
             <form onsubmit="handleEmployeeSubmit(event)" class="space-y-5">
               <div>
                 <label class="block text-xs font-extrabold text-amber-400 mb-2">اسم الموظف *</label>
@@ -372,7 +337,6 @@
                   ${INITIAL_EMPLOYEES.map(emp => `<option value="${emp}">${emp}</option>`).join('')}
                 </select>
               </div>
-
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-extrabold text-amber-400 mb-2">المبلغ المحصل (ج.م) *</label>
@@ -383,7 +347,6 @@
                   <input type="date" id="empDate" value="${getTodayString()}" class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 font-bold text-sm outline-none" required />
                 </div>
               </div>
-
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-extrabold text-amber-400 mb-2">إثباتات التحصيل *</label>
@@ -400,15 +363,11 @@
                   <input type="text" id="empAccount" placeholder="Enter Account Number" class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 text-sm outline-none font-mono text-right" required />
                 </div>
               </div>
-
               <div>
                 <label class="block text-xs font-extrabold text-slate-300 mb-2">ملاحظات (اختياري)</label>
                 <textarea id="empNotes" rows="2" placeholder="أي تفاصيل أخرى..." class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3 text-sm outline-none"></textarea>
               </div>
-
-              <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-4 rounded-2xl text-base shadow-xl">
-                تأكيد وحفظ المبلغ 🚀
-              </button>
+              <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-4 rounded-2xl text-base shadow-xl">تأكيد وحفظ المبلغ 🚀</button>
             </form>
           </div>
         `;
@@ -421,11 +380,7 @@
               <h2 class="text-xl font-black text-amber-400">Team Leader Login</h2>
               <p class="text-xs text-slate-400 mt-1">Enter your credentials to access the dashboard</p>
             </div>
-
-            ${state.loginError ? `
-              <div class="mb-4 bg-red-950/80 border border-red-800 text-red-300 p-3 rounded-xl text-xs font-bold">⚠️ ${state.loginError}</div>
-            ` : ''}
-
+            ${state.loginError ? `<div class="mb-4 bg-red-950/80 border border-red-800 text-red-300 p-3 rounded-xl text-xs font-bold">⚠️ ${state.loginError}</div>` : ''}
             <form onsubmit="handleLoginSubmit(event)" class="space-y-4 text-left" dir="ltr">
               <div>
                 <label class="block text-xs font-bold text-slate-300 mb-1.5">Username</label>
@@ -435,9 +390,7 @@
                 <label class="block text-xs font-bold text-slate-300 mb-1.5">Password</label>
                 <input type="password" id="loginPass" placeholder="Enter password" class="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" required />
               </div>
-              <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black py-3.5 rounded-xl text-sm shadow-lg mt-2">
-                Login
-              </button>
+              <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black py-3.5 rounded-xl text-sm shadow-lg mt-2">Login</button>
             </form>
           </div>
         `;
@@ -449,7 +402,6 @@
         const todayTotal = state.collections.filter(c => c.date === todayStr).reduce((acc, curr) => acc + curr.amount, 0);
         const filteredTotal = filtered.reduce((acc, curr) => acc + curr.amount, 0);
         const overallTotal = state.collections.reduce((acc, curr) => acc + curr.amount, 0);
-
         const summaries = INITIAL_EMPLOYEES.map(emp => {
           const items = filtered.filter(c => c.employeeName === emp);
           const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
@@ -463,25 +415,17 @@
                 <h2 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-emerald-300">Admin Dashboard 📊</h2>
                 <p class="text-xs text-slate-400 mt-0.5">Real-time monitoring of employee collections</p>
               </div>
-              <button onclick="exportToCSV()" class="bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 text-xs font-black px-5 py-3 rounded-2xl shadow-lg">
-                📥 Export CSV
-              </button>
+              <button onclick="exportToCSV()" class="bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 text-xs font-black px-5 py-3 rounded-2xl shadow-lg">📥 Export CSV</button>
             </div>
-
             <div class="glass-card p-6 rounded-3xl border border-amber-500/30">
               <h3 class="text-sm font-bold text-amber-400 mb-3">📢 Manage News Ticker</h3>
               <div class="flex flex-col sm:flex-row gap-3">
                 <input type="text" id="tickerInput" value="${state.newsTicker}" placeholder="Type your message here..." class="flex-1 bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" />
-                <button onclick="updateNewsTicker(document.getElementById('tickerInput').value, true)" class="bg-emerald-600 text-white font-bold text-sm px-4 py-3 rounded-xl">
-                  Publish ✅
-                </button>
-                <button onclick="updateNewsTicker('', false)" class="bg-red-600 text-white font-bold text-sm px-4 py-3 rounded-xl">
-                  Hide ❌
-                </button>
+                <button onclick="updateNewsTicker(document.getElementById('tickerInput').value, true)" class="bg-emerald-600 text-white font-bold text-sm px-4 py-3 rounded-xl">Publish ✅</button>
+                <button onclick="updateNewsTicker('', false)" class="bg-red-600 text-white font-bold text-sm px-4 py-3 rounded-xl">Hide ❌</button>
               </div>
               <p class="text-xs text-slate-400 mt-2">Note: The ticker appears on all pages and is visible to all employees.</p>
             </div>
-
             <div class="glass-card p-6 rounded-3xl space-y-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
@@ -491,7 +435,6 @@
                     ${INITIAL_EMPLOYEES.map(emp => `<option value="${emp}" ${state.selectedEmployeeFilter === emp ? 'selected' : ''}>${emp}</option>`).join('')}
                   </select>
                 </div>
-
                 <div>
                   <label class="block text-xs font-bold text-slate-300 mb-1.5">Date Range</label>
                   <select onchange="changeFilter('dateRangeFilter', this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 font-bold text-slate-100 outline-none">
@@ -501,78 +444,32 @@
                     <option value="month" ${state.dateRangeFilter === 'month' ? 'selected' : ''}>Full Month</option>
                   </select>
                 </div>
-
                 <div>
-                  <label class="block text-xs font-bold text-slate-300 mb-1.5">Search (Account / Employee)</label>
+                  <label class="block text-xs font-bold text-slate-300 mb-1.5">Search</label>
                   <input type="text" value="${state.searchQuery}" placeholder="Search..." oninput="changeFilter('searchQuery', this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 text-slate-100 outline-none" />
                 </div>
               </div>
-
               ${state.dateRangeFilter === 'specific_day' || state.dateRangeFilter === 'month' ? `
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-800">
-                  ${state.dateRangeFilter === 'specific_day' ? `
-                    <div>
-                      <label class="block text-xs font-bold text-amber-400 mb-1">Select Day</label>
-                      <input type="date" value="${state.specificDate}" onchange="changeFilter('specificDate', this.value)" class="w-full bg-slate-900 border border-amber-500/50 text-xs rounded-xl p-2.5 font-bold text-slate-100" />
-                    </div>
-                  ` : ''}
-
-                  ${state.dateRangeFilter === 'month' ? `
-                    <div>
-                      <label class="block text-xs font-bold text-amber-400 mb-1">Select Month</label>
-                      <input type="month" value="${state.specificMonth}" onchange="changeFilter('specificMonth', this.value)" class="w-full bg-slate-900 border border-amber-500/50 text-xs rounded-xl p-2.5 font-bold text-slate-100" />
-                    </div>
-                  ` : ''}
+                  ${state.dateRangeFilter === 'specific_day' ? `<div><label class="block text-xs font-bold text-amber-400 mb-1">Select Day</label><input type="date" value="${state.specificDate}" onchange="changeFilter('specificDate', this.value)" class="w-full bg-slate-900 border border-amber-500/50 text-xs rounded-xl p-2.5 font-bold text-slate-100" /></div>` : ''}
+                  ${state.dateRangeFilter === 'month' ? `<div><label class="block text-xs font-bold text-amber-400 mb-1">Select Month</label><input type="month" value="${state.specificMonth}" onchange="changeFilter('specificMonth', this.value)" class="w-full bg-slate-900 border border-amber-500/50 text-xs rounded-xl p-2.5 font-bold text-slate-100" /></div>` : ''}
                 </div>
               ` : ''}
             </div>
-
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <div class="glass-card p-6 rounded-3xl border-r-4 border-r-emerald-500">
-                <span class="text-xs font-bold text-slate-400">Today's Collections</span>
-                <h3 class="text-2xl font-black text-emerald-400 mt-2">${formatCurrency(todayTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3>
-              </div>
-              <div class="glass-card p-6 rounded-3xl border-r-4 border-r-amber-500">
-                <span class="text-xs font-bold text-amber-400">Filtered Total ${state.selectedEmployeeFilter !== 'all' ? `(${state.selectedEmployeeFilter})` : ''}</span>
-                <h3 class="text-2xl font-black text-amber-400 mt-2">${formatCurrency(filteredTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3>
-                <span class="text-[11px] text-slate-400 font-bold mt-1 block">Transactions: ${filtered.length}</span>
-              </div>
-              <div class="glass-card p-6 rounded-3xl border-r-4 border-r-indigo-500">
-                <span class="text-xs font-bold text-slate-400">Overall Total</span>
-                <h3 class="text-2xl font-black text-slate-100 mt-2">${formatCurrency(overallTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3>
-              </div>
+              <div class="glass-card p-6 rounded-3xl border-r-4 border-r-emerald-500"><span class="text-xs font-bold text-slate-400">Today's Collections</span><h3 class="text-2xl font-black text-emerald-400 mt-2">${formatCurrency(todayTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3></div>
+              <div class="glass-card p-6 rounded-3xl border-r-4 border-r-amber-500"><span class="text-xs font-bold text-amber-400">Filtered Total ${state.selectedEmployeeFilter !== 'all' ? `(${state.selectedEmployeeFilter})` : ''}</span><h3 class="text-2xl font-black text-amber-400 mt-2">${formatCurrency(filteredTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3><span class="text-[11px] text-slate-400 font-bold mt-1 block">Transactions: ${filtered.length}</span></div>
+              <div class="glass-card p-6 rounded-3xl border-r-4 border-r-indigo-500"><span class="text-xs font-bold text-slate-400">Overall Total</span><h3 class="text-2xl font-black text-slate-100 mt-2">${formatCurrency(overallTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3></div>
             </div>
-
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div class="lg:col-span-2 glass-card p-6 rounded-3xl">
-                <h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>📈</span> Top Performers</h3>
-                <div class="h-64 relative">
-                  <canvas id="barChart"></canvas>
-                </div>
-              </div>
-              <div class="glass-card p-6 rounded-3xl">
-                <h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>🍩</span> Payment Methods</h3>
-                <div class="h-64 relative">
-                  <canvas id="pieChart"></canvas>
-                </div>
-              </div>
+              <div class="lg:col-span-2 glass-card p-6 rounded-3xl"><h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>📈</span> Top Performers</h3><div class="h-64 relative"><canvas id="barChart"></canvas></div></div>
+              <div class="glass-card p-6 rounded-3xl"><h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>🍩</span> Payment Methods</h3><div class="h-64 relative"><canvas id="pieChart"></canvas></div></div>
             </div>
-
             <div class="glass-card rounded-3xl overflow-hidden">
-              <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800 flex justify-between items-center">
-                <span>Employee Performance Report</span>
-              </div>
+              <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800 flex justify-between items-center"><span>Employee Performance Report</span></div>
               <div class="overflow-x-auto">
                 <table class="w-full text-right text-sm">
-                  <thead class="bg-slate-900/90 text-slate-400 text-xs border-b border-slate-800">
-                    <tr>
-                      <th class="p-3.5">#</th>
-                      <th class="p-3.5">Employee</th>
-                      <th class="p-3.5">Total Amount</th>
-                      <th class="p-3.5">Payments Count</th>
-                      <th class="p-3.5">Action</th>
-                    </tr>
-                  </thead>
+                  <thead class="bg-slate-900/90 text-slate-400 text-xs border-b border-slate-800"><tr><th class="p-3.5">#</th><th class="p-3.5">Employee</th><th class="p-3.5">Total Amount</th><th class="p-3.5">Payments Count</th><th class="p-3.5">Action</th></tr></thead>
                   <tbody class="divide-y divide-slate-800/60">
                     ${summaries.map((emp, i) => `
                       <tr class="hover:bg-slate-800/40 transition-colors ${state.selectedEmployeeFilter === emp.name ? 'bg-amber-500/10' : ''}">
@@ -580,35 +477,18 @@
                         <td class="p-3.5 font-bold text-slate-200">${emp.name}</td>
                         <td class="p-3.5 text-emerald-400 font-black">${emp.totalAmount > 0 ? `${formatCurrency(emp.totalAmount)} EGP` : '-'}</td>
                         <td class="p-3.5 text-xs text-slate-400 font-semibold">${emp.count} ops</td>
-                        <td class="p-3.5">
-                          <button onclick="changeFilter('selectedEmployeeFilter', '${emp.name}')" class="text-xs bg-slate-800 text-amber-400 border border-slate-700 font-bold px-3 py-1.5 rounded-xl">
-                            Filter
-                          </button>
-                        </td>
+                        <td class="p-3.5"><button onclick="changeFilter('selectedEmployeeFilter', '${emp.name}')" class="text-xs bg-slate-800 text-amber-400 border border-slate-700 font-bold px-3 py-1.5 rounded-xl">Filter</button></td>
                       </tr>
                     `).join('')}
                   </tbody>
                 </table>
               </div>
             </div>
-
             <div class="glass-card rounded-3xl overflow-hidden">
-              <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800">
-                Live Transactions (${filtered.length} ops)
-              </div>
+              <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800">Live Transactions (${filtered.length} ops)</div>
               <div class="overflow-x-auto max-h-[450px] custom-scrollbar">
                 <table class="w-full text-right text-sm">
-                  <thead class="bg-slate-900/90 text-slate-400 text-xs sticky top-0 border-b border-slate-800 z-10">
-                    <tr>
-                      <th class="p-3.5">Date</th>
-                      <th class="p-3.5">Employee</th>
-                      <th class="p-3.5">Amount</th>
-                      <th class="p-3.5">Account Number</th>
-                      <th class="p-3.5">Payment Type</th>
-                      <th class="p-3.5">Notes</th>
-                      <th class="p-3.5">Delete</th>
-                    </tr>
-                  </thead>
+                  <thead class="bg-slate-900/90 text-slate-400 text-xs sticky top-0 border-b border-slate-800 z-10"><tr><th class="p-3.5">Date</th><th class="p-3.5">Employee</th><th class="p-3.5">Amount</th><th class="p-3.5">Account Number</th><th class="p-3.5">Payment Type</th><th class="p-3.5">Notes</th><th class="p-3.5">Delete</th></tr></thead>
                   <tbody class="divide-y divide-slate-800/60">
                     ${filtered.map(row => `
                       <tr class="hover:bg-slate-800/40">
@@ -618,9 +498,7 @@
                         <td class="p-3.5 text-slate-300 font-mono text-lg font-bold">${row.clientName}</td>
                         <td class="p-3.5 text-xs font-bold text-slate-300">${row.paymentType}</td>
                         <td class="p-3.5 text-xs text-slate-400 max-w-[200px] truncate" title="${row.notes}">${row.notes}</td>
-                        <td class="p-3.5">
-                          <button onclick="deleteItem('${row.id}')" class="text-red-400 font-bold text-xs bg-red-950/40 border border-red-800/50 px-2.5 py-1 rounded-lg">Delete</button>
-                        </td>
+                        <td class="p-3.5"><button onclick="deleteItem('${row.id}')" class="text-red-400 font-bold text-xs bg-red-950/40 border border-red-800/50 px-2.5 py-1 rounded-lg">Delete</button></td>
                       </tr>
                     `).join('')}
                   </tbody>
@@ -656,7 +534,6 @@
     function initCharts() {
       setTimeout(() => {
         const filtered = getFilteredCollections();
-        
         const empTotals = INITIAL_EMPLOYEES.map(emp => {
           const sum = filtered.filter(c => c.employeeName === emp).reduce((a, b) => a + b.amount, 0);
           return { name: emp, sum };
@@ -667,49 +544,28 @@
           if (barChartInstance) barChartInstance.destroy();
           barChartInstance = new Chart(barCanvas, {
             type: 'bar',
-            data: {
-              labels: empTotals.map(e => e.name),
-              datasets: [{
-                label: 'Amount (EGP)',
-                data: empTotals.map(e => e.sum),
-                backgroundColor: '#f59e0b',
-                borderRadius: 8
-              }]
-            },
+            data: { labels: empTotals.map(e => e.name), datasets: [{ label: 'Amount (EGP)', data: empTotals.map(e => e.sum), backgroundColor: '#f59e0b', borderRadius: 8 }] },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
           });
         }
 
         const paymentCounts = { 'إيصال': 0, 'اتصالات كاش': 0, 'غير معروف': 0, 'مشكلة في الكاش': 0 };
-        filtered.forEach(c => {
-          if (paymentCounts[c.paymentType] !== undefined) paymentCounts[c.paymentType] += c.amount;
-        });
+        filtered.forEach(c => { if (paymentCounts[c.paymentType] !== undefined) paymentCounts[c.paymentType] += c.amount; });
 
         const pieCanvas = document.getElementById('pieChart');
         if (pieCanvas) {
           if (pieChartInstance) pieChartInstance.destroy();
           pieChartInstance = new Chart(pieCanvas, {
             type: 'doughnut',
-            data: {
-              labels: Object.keys(paymentCounts),
-              datasets: [{ data: Object.values(paymentCounts), backgroundColor: ['#10b981', '#3b82f6', '#ef4444', '#64748b'] }]
-            },
+            data: { labels: Object.keys(paymentCounts), datasets: [{ data: Object.values(paymentCounts), backgroundColor: ['#10b981', '#3b82f6', '#ef4444', '#64748b'] }] },
             options: { responsive: true, maintainAspectRatio: false }
           });
         }
       }, 100);
     }
 
-    window.navigate = function(view) {
-      state.currentView = view;
-      render();
-    };
-
-    window.logoutAdmin = function() {
-      state.isAdminLoggedIn = false;
-      state.currentView = 'employee';
-      render();
-    };
+    window.navigate = function(view) { state.currentView = view; render(); };
+    window.logoutAdmin = function() { state.isAdminLoggedIn = false; state.currentView = 'employee'; render(); };
 
     window.handleLoginSubmit = function(e) {
       e.preventDefault();
@@ -725,10 +581,7 @@
       render();
     };
 
-    window.changeFilter = function(key, value) {
-      state[key] = value;
-      render();
-    };
+    window.changeFilter = function(key, value) { state[key] = value; render(); };
 
     window.handleEmployeeSubmit = async function(e) {
       e.preventDefault();
@@ -736,10 +589,7 @@
       const dateVal = document.getElementById('empDate').value || 'غير محدد';
       const paymentTypeVal = document.getElementById('empPaymentType').value;
 
-      if (!amountVal || amountVal <= 0) {
-        alert('الرجاء إدخال مبلغ صحيح');
-        return;
-      }
+      if (!amountVal || amountVal <= 0) { alert('الرجاء إدخال مبلغ صحيح'); return; }
 
       const newRecord = {
         employeeName: document.getElementById('empName').value,
@@ -770,11 +620,7 @@
 
       state.employeeSuccessMsg = `تم إرسال مبلغ ${formatCurrency(amountVal)} ج.م سحابياً بنجاح! 🎉`;
       render();
-
-      setTimeout(() => {
-        state.employeeSuccessMsg = '';
-        render();
-      }, 4000);
+      setTimeout(() => { state.employeeSuccessMsg = ''; render(); }, 4000);
     };
 
     window.deleteItem = async function(id) {
@@ -784,9 +630,7 @@
             const { db, appId, doc, deleteDoc } = window.CloudDB;
             const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'collections', id);
             await deleteDoc(itemRef);
-          } catch (err) {
-            console.error("Cloud delete error:", err);
-          }
+          } catch (err) { console.error("Cloud delete error:", err); }
         } else {
           state.collections = state.collections.filter(c => c.id !== id);
           saveCollectionsLocally();
@@ -798,9 +642,7 @@
     window.exportToCSV = function() {
       const filtered = getFilteredCollections();
       const headers = ["Date", "Employee", "Amount (EGP)", "Payment Type", "Account Number", "Notes"];
-      const rows = filtered.map(c => [
-        c.date, `"${c.employeeName}"`, c.amount, `"${c.paymentType}"`, `"${c.clientName}"`, `"${c.notes}"`
-      ]);
+      const rows = filtered.map(c => [c.date, `"${c.employeeName}"`, c.amount, `"${c.paymentType}"`, `"${c.clientName}"`, `"${c.notes}"`]);
       const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
