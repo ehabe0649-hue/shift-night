@@ -15,9 +15,9 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // بيانات مشروعك الحقيقية (تم تصحيح المفتاح من صورتك الأخيرة)
+    // بيانات مشروعك الحقيقية
     const firebaseConfig = {
       apiKey: "AIzaSyAgkwoY5Fvpo8_G1CascrQ3T2DqKCjVVyg",
       authDomain: "shift-night.firebaseapp.com",
@@ -34,17 +34,10 @@
     const db = getFirestore(app);
 
     window.CloudDB = {
-      db,
-      auth,
-      appId,
-      collection,
-      addDoc,
-      onSnapshot,
-      deleteDoc,
-      doc,
-      signInAnonymously
+      db, auth, appId, collection, addDoc, onSnapshot, deleteDoc, doc, query, setDoc, getDoc
     };
 
+    // تشغيل الاتصال بعد تحميل الصفحة
     window.addEventListener('load', () => {
       setTimeout(() => {
         if (window.initCloudSync) window.initCloudSync();
@@ -79,6 +72,28 @@
 
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+
+    /* ستايل النشرة */
+    @keyframes marquee {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+    .ticker-wrap {
+      width: 100%;
+      overflow: hidden;
+      background: #b45309;
+      color: white;
+      padding: 10px 0;
+      box-sizing: content-box;
+    }
+    .ticker {
+      display: inline-block;
+      white-space: nowrap;
+      padding-right: 100%;
+      animation: marquee 20s linear infinite;
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
   </style>
 </head>
 <body class="theme-midnight min-h-screen custom-scrollbar">
@@ -87,18 +102,57 @@
 
   <script>
     const INITIAL_EMPLOYEES = [
-      "Mayada Ibrahim", "Mohamed Tarek", "Shahd Mohamed", "Mohamed Emad",
-      "Nada Ibrahim", "Nagham Mohammed", "Salsabel Mahmoud", "Ezz Mohamed",
-      "Eman Ezzat", "Rodina Mostafa", "Maraim Mahmoud", "Mohamed Sabry",
-      "Menna Sayed", "Ahmed Rafee", "Malak Mosaed", "Habiba Mahmoud",
-      "Malak Atef", "Seif Tamer", "Adham Mohamed", "Youssef Mohamed",
-      "Ehab Emad", "Youssef Gaber", "Ghada Ahmed"
+      "Adham Mohamed", "Ahmed Rafee", "Ehab Emad", "Eman Ezzat", "Ezz Mohamed",
+      "Ghada Ahmed", "Habiba Mahmoud", "Malak Atef", "Malak Mosaed", "Maraim Mahmoud",
+      "Marwan", "Mayada Ibrahim", "Menna Sayed", "Mohamed Emad", "Mohamed Sabry",
+      "Mohamed Tarek", "Nada Ibrahim", "Nagham Mohammed", "Rodina Mostafa",
+      "Salsabel Mahmoud", "Seif Tamer", "Shahd Mohamed", "Youssef Gaber", "Youssef Mohamed"
     ];
 
     const getTodayString = () => new Date().toISOString().split('T')[0];
 
     const formatCurrency = (val) => {
-      return (Number(val) || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return (Number(val) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    const getEmployeeImage = (name) => {
+      const formattedName = name.replace(/ /g, '_');
+      return `https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/${formattedName}.jpg`;
+    };
+
+    const getHeroData = () => {
+      const today = new Date();
+      const dayOfMonth = today.getDate();
+      const todayStr = getTodayString();
+      const monthStr = getTodayString().slice(0, 7);
+
+      let isMonthlyMode = dayOfMonth >= 21;
+      let relevantCollections = [];
+
+      if (isMonthlyMode) {
+        relevantCollections = state.collections.filter(c => c.date.startsWith(monthStr));
+      } else {
+        relevantCollections = state.collections.filter(c => c.date === todayStr);
+      }
+
+      if (relevantCollections.length === 0) return null;
+
+      const totalsByEmp = {};
+      relevantCollections.forEach(c => {
+        if (!totalsByEmp[c.employeeName]) totalsByEmp[c.employeeName] = 0;
+        totalsByEmp[c.employeeName] += c.amount;
+      });
+
+      let heroName = null;
+      let maxAmount = 0;
+      for (const [name, total] of Object.entries(totalsByEmp)) {
+        if (total > maxAmount) {
+          maxAmount = total;
+          heroName = name;
+        }
+      }
+
+      return { name: heroName, amount: maxAmount, isMonthly: isMonthlyMode };
     };
 
     let state = {
@@ -106,6 +160,8 @@
       isAdminLoggedIn: false,
       currentTheme: localStorage.getItem('shift_night_theme') || 'midnight',
       collections: JSON.parse(localStorage.getItem('shift_night_local_fallback')) || [],
+      newsTicker: '',
+      isTickerActive: false,
       dateRangeFilter: 'all',
       specificDate: getTodayString(),
       specificMonth: getTodayString().slice(0, 7),
@@ -118,12 +174,13 @@
 
     window.initCloudSync = async function() {
       if (!window.CloudDB) return;
-      const { db, auth, appId, collection, onSnapshot, signInAnonymously } = window.CloudDB;
+      const { db, auth, appId, collection, onSnapshot, signInAnonymously, doc } = window.CloudDB;
 
       try {
         await signInAnonymously(auth);
+        
+        // 1. جلب البيانات (التحصيلات)
         const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'collections');
-
         onSnapshot(colRef, (snapshot) => {
           const cloudData = [];
           snapshot.forEach((docSnap) => {
@@ -134,11 +191,22 @@
           state.isCloudConnected = true;
           localStorage.setItem('shift_night_local_fallback', JSON.stringify(cloudData));
           render();
-        }, (error) => {
-          console.warn("Cloud live sync error:", error);
-          state.isCloudConnected = false;
+        });
+
+        // 2. جلب بيانات النشرة (News Ticker)
+        const tickerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'news_ticker');
+        onSnapshot(tickerDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            state.newsTicker = data.text || '';
+            state.isTickerActive = data.active || false;
+          } else {
+            state.newsTicker = '';
+            state.isTickerActive = false;
+          }
           render();
         });
+
       } catch (err) {
         console.error("Auth / Cloud error:", err);
         state.isCloudConnected = false;
@@ -155,6 +223,22 @@
       localStorage.setItem('shift_night_theme', themeName);
       render();
     }
+
+    window.updateNewsTicker = async function(text, active) {
+      if (!window.CloudDB) return;
+      const { db, appId, doc, setDoc } = window.CloudDB;
+      const tickerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'news_ticker');
+      
+      try {
+        await setDoc(tickerDocRef, { text: text, active: active }, { merge: true });
+        state.newsTicker = text;
+        state.isTickerActive = active;
+        render();
+      } catch (err) {
+        console.error("Error updating ticker:", err);
+        alert("حدث خطأ أثناء تحديث النشرة");
+      }
+    };
 
     function render() {
       document.body.className = `theme-${state.currentTheme} min-h-screen custom-scrollbar`;
@@ -184,7 +268,7 @@
 
               ${state.currentView === 'employee' ? `
                 <button onclick="navigate('admin_login')" class="bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs px-4 py-2.5 rounded-2xl shadow-lg">
-                  دخول المدير 🔒
+                  Admin Login 🔒
                 </button>
               ` : `
                 <button onclick="navigate('employee')" class="bg-slate-800 text-amber-400 border border-slate-700 font-bold text-xs px-3.5 py-2.5 rounded-2xl">
@@ -192,15 +276,24 @@
                 </button>
                 ${state.isAdminLoggedIn ? `
                   <button onclick="logoutAdmin()" class="bg-red-950/80 text-red-300 border border-red-800 font-bold text-xs px-3.5 py-2.5 rounded-2xl">
-                    خروج
+                    Logout
                   </button>
                 ` : ''}
               `}
             </div>
           </div>
+          
+          ${state.isTickerActive && state.newsTicker ? `
+            <div class="ticker-wrap">
+              <div class="ticker">
+                📢 ${state.newsTicker} 📢
+              </div>
+            </div>
+          ` : ''}
         </header>
 
         <main class="max-w-7xl mx-auto px-4 py-8">
+          ${renderHero()}
           ${renderContent()}
         </main>
       `;
@@ -209,6 +302,52 @@
         initCharts();
       }
     }
+
+    function renderHero() {
+      const hero = getHeroData();
+      if (!hero) return '';
+
+      const title = hero.isMonthly ? "CHAMPION OF THE MONTH" : "HERO OF THE DAY";
+      const subtitle = hero.isMonthly ? "أعلى إجمالي تحصيل من أول الشهر" : "أعلى تحصيل لليوم";
+
+      return `
+        <div class="mb-8 relative overflow-hidden glass-card rounded-3xl p-6 sm:p-8 border-2 border-amber-500/50 shadow-[0_0_40px_rgba(245,158,11,0.2)] bg-gradient-to-br from-slate-900 via-slate-900 to-amber-900/20">
+          <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 font-black text-xs px-4 py-1.5 rounded-bl-2xl shadow-lg z-10">
+            ${title}
+          </div>
+          
+          <div class="flex flex-col sm:flex-row items-center gap-6 relative z-0">
+            <div class="relative shrink-0">
+              <div class="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] overflow-hidden bg-slate-800 flex items-center justify-center">
+                <img src="${getEmployeeImage(hero.name)}" alt="${hero.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
+              </div>
+              <div class="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 font-black text-xl w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 shadow-lg">1</div>
+            </div>
+
+            <div class="text-center sm:text-right flex-1">
+              <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">${subtitle}</p>
+              <h2 class="text-3xl font-black text-white mb-2" dir="ltr">${hero.name}</h2>
+              <p class="text-emerald-400 font-black text-xl mb-3" dir="ltr">${formatCurrency(hero.amount)} EGP</p>
+              <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">
+                "Champions keep playing until they get it right. Keep going! 🚀"
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    window.handlePaymentTypeChange = function() {
+      const type = document.getElementById('empPaymentType').value;
+      const dateDiv = document.getElementById('dateDiv');
+      if (type === 'غير معروف') {
+        dateDiv.style.display = 'none';
+        document.getElementById('empDate').required = false;
+      } else {
+        dateDiv.style.display = 'block';
+        document.getElementById('empDate').required = true;
+      }
+    };
 
     function renderContent() {
       if (state.currentView === 'employee') {
@@ -231,7 +370,8 @@
             <form onsubmit="handleEmployeeSubmit(event)" class="space-y-5">
               <div>
                 <label class="block text-xs font-extrabold text-amber-400 mb-2">اسم الموظف *</label>
-                <select id="empName" class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 font-bold text-sm outline-none">
+                <select id="empName" required class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 font-bold text-sm outline-none">
+                  <option value="" disabled selected>اختر اسم الموظف...</option>
                   ${INITIAL_EMPLOYEES.map(emp => `<option value="${emp}">${emp}</option>`).join('')}
                 </select>
               </div>
@@ -241,7 +381,7 @@
                   <label class="block text-xs font-extrabold text-amber-400 mb-2">المبلغ المحصل (ج.م) *</label>
                   <input type="number" id="empAmount" step="0.01" min="0.01" placeholder="0.00" class="w-full bg-slate-900/90 border border-slate-700 text-emerald-400 rounded-2xl p-3.5 text-lg font-black outline-none" required />
                 </div>
-                <div>
+                <div id="dateDiv">
                   <label class="block text-xs font-extrabold text-amber-400 mb-2">التاريخ *</label>
                   <input type="date" id="empDate" value="${getTodayString()}" class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 font-bold text-sm outline-none" required />
                 </div>
@@ -250,15 +390,17 @@
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-extrabold text-amber-400 mb-2">إثباتات التحصيل *</label>
-                  <select id="empPaymentType" class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 font-bold text-sm outline-none">
+                  <select id="empPaymentType" required onchange="handlePaymentTypeChange()" class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 font-bold text-sm outline-none">
+                    <option value="" disabled selected>اختر نوع الإثبات...</option>
                     <option value="إيصال">إيصال</option>
                     <option value="اتصالات كاش">اتصالات كاش</option>
+                    <option value="مشكلة في الكاش">مشكلة في الكاش</option>
                     <option value="غير معروف">غير معروف</option>
                   </select>
                 </div>
                 <div>
-                  <label class="block text-xs font-extrabold text-amber-400 mb-2">Account Number</label>
-                  <input type="text" id="empAccount" placeholder="Enter Account Number" class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 text-sm outline-none font-mono text-right" />
+                  <label class="block text-xs font-extrabold text-amber-400 mb-2">Account Number *</label>
+                  <input type="text" id="empAccount" placeholder="Enter Account Number" class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 text-sm outline-none font-mono text-right" required />
                 </div>
               </div>
 
@@ -279,25 +421,25 @@
         return `
           <div class="max-w-md mx-auto glass-card rounded-3xl shadow-2xl p-8 border border-slate-800">
             <div class="text-center mb-6">
-              <h2 class="text-xl font-black text-amber-400">لوحة تحكم الـ Team Leader</h2>
-              <p class="text-xs text-slate-400 mt-1">ادخل كلمة السر المعتمدة لمتابعة الموظفين</p>
+              <h2 class="text-xl font-black text-amber-400">Team Leader Login</h2>
+              <p class="text-xs text-slate-400 mt-1">Enter your credentials to access the dashboard</p>
             </div>
 
             ${state.loginError ? `
               <div class="mb-4 bg-red-950/80 border border-red-800 text-red-300 p-3 rounded-xl text-xs font-bold">⚠️ ${state.loginError}</div>
             ` : ''}
 
-            <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
+            <form onsubmit="handleLoginSubmit(event)" class="space-y-4 text-left" dir="ltr">
               <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1.5">اسم المستخدم</label>
-                <input type="text" id="loginUser" placeholder="Username" class="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" required />
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">Username</label>
+                <input type="text" id="loginUser" placeholder="Enter username" class="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" required />
               </div>
               <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1.5">كلمة السر</label>
-                <input type="password" id="loginPass" placeholder="Password" class="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" required />
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">Password</label>
+                <input type="password" id="loginPass" placeholder="Enter password" class="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" required />
               </div>
-              <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black py-3.5 rounded-xl text-sm shadow-lg">
-                دخول اللوحة الفورية
+              <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black py-3.5 rounded-xl text-sm shadow-lg mt-2">
+                Login
               </button>
             </form>
           </div>
@@ -321,37 +463,51 @@
           <div class="space-y-6">
             <div class="glass-card rounded-3xl p-6 flex flex-wrap justify-between items-center gap-4">
               <div>
-                <h2 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-emerald-300">لوحة تحكم الـ Team Leader المباشرة 📊</h2>
-                <p class="text-xs text-slate-400 mt-0.5">متابعة لحظية لإدخالات الـ 23 موظف من أي جهاز</p>
+                <h2 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-emerald-300">Admin Dashboard 📊</h2>
+                <p class="text-xs text-slate-400 mt-0.5">Real-time monitoring of employee collections</p>
               </div>
               <button onclick="exportToCSV()" class="bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 text-xs font-black px-5 py-3 rounded-2xl shadow-lg">
-                📥 تصدير تقرير إكسيل (CSV)
+                📥 Export CSV
               </button>
+            </div>
+
+            <div class="glass-card p-6 rounded-3xl border border-amber-500/30">
+              <h3 class="text-sm font-bold text-amber-400 mb-3">📢 Manage News Ticker</h3>
+              <div class="flex flex-col sm:flex-row gap-3">
+                <input type="text" id="tickerInput" value="${state.newsTicker}" placeholder="Type your message here..." class="flex-1 bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" />
+                <button onclick="updateNewsTicker(document.getElementById('tickerInput').value, true)" class="bg-emerald-600 text-white font-bold text-sm px-4 py-3 rounded-xl">
+                  Publish ✅
+                </button>
+                <button onclick="updateNewsTicker('', false)" class="bg-red-600 text-white font-bold text-sm px-4 py-3 rounded-xl">
+                  Hide ❌
+                </button>
+              </div>
+              <p class="text-xs text-slate-400 mt-2">Note: The ticker appears on all pages and is visible to all employees.</p>
             </div>
 
             <div class="glass-card p-6 rounded-3xl space-y-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
-                  <label class="block text-xs font-bold text-amber-400 mb-1.5">👤 فلترة موظف معين</label>
+                  <label class="block text-xs font-bold text-amber-400 mb-1.5">👤 Filter by Employee</label>
                   <select onchange="changeFilter('selectedEmployeeFilter', this.value)" class="w-full bg-slate-900 border border-amber-500/40 text-xs rounded-xl p-3 font-bold text-slate-100 outline-none">
-                    <option value="all" ${state.selectedEmployeeFilter === 'all' ? 'selected' : ''}>جميع الموظفين (الـ 23 موظف)</option>
+                    <option value="all" ${state.selectedEmployeeFilter === 'all' ? 'selected' : ''}>All Employees</option>
                     ${INITIAL_EMPLOYEES.map(emp => `<option value="${emp}" ${state.selectedEmployeeFilter === emp ? 'selected' : ''}>${emp}</option>`).join('')}
                   </select>
                 </div>
 
                 <div>
-                  <label class="block text-xs font-bold text-slate-300 mb-1.5">الفترة الزمنية والتاريخ</label>
+                  <label class="block text-xs font-bold text-slate-300 mb-1.5">Date Range</label>
                   <select onchange="changeFilter('dateRangeFilter', this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 font-bold text-slate-100 outline-none">
-                    <option value="all" ${state.dateRangeFilter === 'all' ? 'selected' : ''}>جميع التواريخ (التراكمي)</option>
-                    <option value="today" ${state.dateRangeFilter === 'today' ? 'selected' : ''}>تحصيل اليوم الحالي</option>
-                    <option value="specific_day" ${state.dateRangeFilter === 'specific_day' ? 'selected' : ''}>تاريخ يوم محدد</option>
-                    <option value="month" ${state.dateRangeFilter === 'month' ? 'selected' : ''}>تقرير شهر بالكامل</option>
+                    <option value="all" ${state.dateRangeFilter === 'all' ? 'selected' : ''}>All Time</option>
+                    <option value="today" ${state.dateRangeFilter === 'today' ? 'selected' : ''}>Today</option>
+                    <option value="specific_day" ${state.dateRangeFilter === 'specific_day' ? 'selected' : ''}>Specific Day</option>
+                    <option value="month" ${state.dateRangeFilter === 'month' ? 'selected' : ''}>Full Month</option>
                   </select>
                 </div>
 
                 <div>
-                  <label class="block text-xs font-bold text-slate-300 mb-1.5">بحث سريع (Account / الموظف)</label>
-                  <input type="text" value="${state.searchQuery}" placeholder="أدخل كلمة البحث..." oninput="changeFilter('searchQuery', this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 text-slate-100 outline-none" />
+                  <label class="block text-xs font-bold text-slate-300 mb-1.5">Search (Account / Employee)</label>
+                  <input type="text" value="${state.searchQuery}" placeholder="Search..." oninput="changeFilter('searchQuery', this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 text-slate-100 outline-none" />
                 </div>
               </div>
 
@@ -359,14 +515,14 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-800">
                   ${state.dateRangeFilter === 'specific_day' ? `
                     <div>
-                      <label class="block text-xs font-bold text-amber-400 mb-1">اختر اليوم المحدد</label>
+                      <label class="block text-xs font-bold text-amber-400 mb-1">Select Day</label>
                       <input type="date" value="${state.specificDate}" onchange="changeFilter('specificDate', this.value)" class="w-full bg-slate-900 border border-amber-500/50 text-xs rounded-xl p-2.5 font-bold text-slate-100" />
                     </div>
                   ` : ''}
 
                   ${state.dateRangeFilter === 'month' ? `
                     <div>
-                      <label class="block text-xs font-bold text-amber-400 mb-1">اختر الشهر المحدد</label>
+                      <label class="block text-xs font-bold text-amber-400 mb-1">Select Month</label>
                       <input type="month" value="${state.specificMonth}" onchange="changeFilter('specificMonth', this.value)" class="w-full bg-slate-900 border border-amber-500/50 text-xs rounded-xl p-2.5 font-bold text-slate-100" />
                     </div>
                   ` : ''}
@@ -376,29 +532,29 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <div class="glass-card p-6 rounded-3xl border-r-4 border-r-emerald-500">
-                <span class="text-xs font-bold text-slate-400">تحصيلات اليوم الحالي</span>
-                <h3 class="text-2xl font-black text-emerald-400 mt-2">${formatCurrency(todayTotal)} <span class="text-xs text-slate-400 font-bold">ج.م</span></h3>
+                <span class="text-xs font-bold text-slate-400">Today's Collections</span>
+                <h3 class="text-2xl font-black text-emerald-400 mt-2">${formatCurrency(todayTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3>
               </div>
               <div class="glass-card p-6 rounded-3xl border-r-4 border-r-amber-500">
-                <span class="text-xs font-bold text-amber-400">إجمالي الفلتر المحدّد ${state.selectedEmployeeFilter !== 'all' ? `(${state.selectedEmployeeFilter})` : ''}</span>
-                <h3 class="text-2xl font-black text-amber-400 mt-2">${formatCurrency(filteredTotal)} <span class="text-xs text-slate-400 font-bold">ج.م</span></h3>
-                <span class="text-[11px] text-slate-400 font-bold mt-1 block">عدد الفواتير/العمليات: ${filtered.length} عملية</span>
+                <span class="text-xs font-bold text-amber-400">Filtered Total ${state.selectedEmployeeFilter !== 'all' ? `(${state.selectedEmployeeFilter})` : ''}</span>
+                <h3 class="text-2xl font-black text-amber-400 mt-2">${formatCurrency(filteredTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3>
+                <span class="text-[11px] text-slate-400 font-bold mt-1 block">Transactions: ${filtered.length}</span>
               </div>
               <div class="glass-card p-6 rounded-3xl border-r-4 border-r-indigo-500">
-                <span class="text-xs font-bold text-slate-400">الإجمالي التراكمي الكلي</span>
-                <h3 class="text-2xl font-black text-slate-100 mt-2">${formatCurrency(overallTotal)} <span class="text-xs text-slate-400 font-bold">ج.م</span></h3>
+                <span class="text-xs font-bold text-slate-400">Overall Total</span>
+                <h3 class="text-2xl font-black text-slate-100 mt-2">${formatCurrency(overallTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3>
               </div>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div class="lg:col-span-2 glass-card p-6 rounded-3xl">
-                <h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>📈</span> أعلى الموظفين تحصيلاً</h3>
+                <h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>📈</span> Top Performers</h3>
                 <div class="h-64 relative">
                   <canvas id="barChart"></canvas>
                 </div>
               </div>
               <div class="glass-card p-6 rounded-3xl">
-                <h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>🍩</span> طرق إثبات التحصيل</h3>
+                <h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>🍩</span> Payment Methods</h3>
                 <div class="h-64 relative">
                   <canvas id="pieChart"></canvas>
                 </div>
@@ -407,17 +563,17 @@
 
             <div class="glass-card rounded-3xl overflow-hidden">
               <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800 flex justify-between items-center">
-                <span>تقرير أداء الموظفين الـ 23</span>
+                <span>Employee Performance Report</span>
               </div>
               <div class="overflow-x-auto">
                 <table class="w-full text-right text-sm">
                   <thead class="bg-slate-900/90 text-slate-400 text-xs border-b border-slate-800">
                     <tr>
                       <th class="p-3.5">#</th>
-                      <th class="p-3.5">الموظف</th>
-                      <th class="p-3.5">إجمالي مبلغ التحصيل</th>
-                      <th class="p-3.5">عدد الدفعات</th>
-                      <th class="p-3.5">إجراء</th>
+                      <th class="p-3.5">Employee</th>
+                      <th class="p-3.5">Total Amount</th>
+                      <th class="p-3.5">Payments Count</th>
+                      <th class="p-3.5">Action</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-800/60">
@@ -425,11 +581,11 @@
                       <tr class="hover:bg-slate-800/40 transition-colors ${state.selectedEmployeeFilter === emp.name ? 'bg-amber-500/10' : ''}">
                         <td class="p-3.5 text-xs text-slate-500 font-bold">${i + 1}</td>
                         <td class="p-3.5 font-bold text-slate-200">${emp.name}</td>
-                        <td class="p-3.5 text-emerald-400 font-black">${emp.totalAmount > 0 ? `${formatCurrency(emp.totalAmount)} ج.م` : '-'}</td>
-                        <td class="p-3.5 text-xs text-slate-400 font-semibold">${emp.count} عملية</td>
+                        <td class="p-3.5 text-emerald-400 font-black">${emp.totalAmount > 0 ? `${formatCurrency(emp.totalAmount)} EGP` : '-'}</td>
+                        <td class="p-3.5 text-xs text-slate-400 font-semibold">${emp.count} ops</td>
                         <td class="p-3.5">
                           <button onclick="changeFilter('selectedEmployeeFilter', '${emp.name}')" class="text-xs bg-slate-800 text-amber-400 border border-slate-700 font-bold px-3 py-1.5 rounded-xl">
-                            فلترة
+                            Filter
                           </button>
                         </td>
                       </tr>
@@ -441,18 +597,19 @@
 
             <div class="glass-card rounded-3xl overflow-hidden">
               <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800">
-                سجل المعاملات المباشرة (${filtered.length} عملية)
+                Live Transactions (${filtered.length} ops)
               </div>
               <div class="overflow-x-auto max-h-[450px] custom-scrollbar">
                 <table class="w-full text-right text-sm">
                   <thead class="bg-slate-900/90 text-slate-400 text-xs sticky top-0 border-b border-slate-800 z-10">
                     <tr>
-                      <th class="p-3.5">التاريخ</th>
-                      <th class="p-3.5">الموظف</th>
-                      <th class="p-3.5">المبلغ</th>
+                      <th class="p-3.5">Date</th>
+                      <th class="p-3.5">Employee</th>
+                      <th class="p-3.5">Amount</th>
                       <th class="p-3.5">Account Number</th>
-                      <th class="p-3.5">إثبات التحصيل</th>
-                      <th class="p-3.5">حذف</th>
+                      <th class="p-3.5">Payment Type</th>
+                      <th class="p-3.5">Notes</th>
+                      <th class="p-3.5">Delete</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-800/60">
@@ -460,11 +617,12 @@
                       <tr class="hover:bg-slate-800/40">
                         <td class="p-3.5 text-xs text-slate-400 font-mono">${row.date}</td>
                         <td class="p-3.5 font-bold text-slate-200">${row.employeeName}</td>
-                        <td class="p-3.5 font-black text-emerald-400">${formatCurrency(row.amount)} ج.م</td>
-                        <td class="p-3.5 text-slate-300 font-mono text-xs">${row.clientName}</td>
+                        <td class="p-3.5 font-black text-emerald-400">${formatCurrency(row.amount)} EGP</td>
+                        <td class="p-3.5 text-slate-300 font-mono text-lg font-bold">${row.clientName}</td>
                         <td class="p-3.5 text-xs font-bold text-slate-300">${row.paymentType}</td>
+                        <td class="p-3.5 text-xs text-slate-400 max-w-[200px] truncate" title="${row.notes}">${row.notes}</td>
                         <td class="p-3.5">
-                          <button onclick="deleteItem('${row.id}')" class="text-red-400 font-bold text-xs bg-red-950/40 border border-red-800/50 px-2.5 py-1 rounded-lg">حذف</button>
+                          <button onclick="deleteItem('${row.id}')" class="text-red-400 font-bold text-xs bg-red-950/40 border border-red-800/50 px-2.5 py-1 rounded-lg">Delete</button>
                         </td>
                       </tr>
                     `).join('')}
@@ -515,7 +673,7 @@
             data: {
               labels: empTotals.map(e => e.name),
               datasets: [{
-                label: 'المبلغ (ج.م)',
+                label: 'Amount (EGP)',
                 data: empTotals.map(e => e.sum),
                 backgroundColor: '#f59e0b',
                 borderRadius: 8
@@ -525,7 +683,7 @@
           });
         }
 
-        const paymentCounts = { 'إيصال': 0, 'اتصالات كاش': 0, 'غير معروف': 0 };
+        const paymentCounts = { 'إيصال': 0, 'اتصالات كاش': 0, 'غير معروف': 0, 'مشكلة في الكاش': 0 };
         filtered.forEach(c => {
           if (paymentCounts[c.paymentType] !== undefined) paymentCounts[c.paymentType] += c.amount;
         });
@@ -537,7 +695,7 @@
             type: 'doughnut',
             data: {
               labels: Object.keys(paymentCounts),
-              datasets: [{ data: Object.values(paymentCounts), backgroundColor: ['#10b981', '#3b82f6', '#64748b'] }]
+              datasets: [{ data: Object.values(paymentCounts), backgroundColor: ['#10b981', '#3b82f6', '#ef4444', '#64748b'] }]
             },
             options: { responsive: true, maintainAspectRatio: false }
           });
@@ -565,7 +723,7 @@
         state.currentView = 'admin_dashboard';
         state.loginError = '';
       } else {
-        state.loginError = 'اسم المستخدم أو كلمة السر غير صحيحة!';
+        state.loginError = 'Invalid username or password!';
       }
       render();
     };
@@ -578,13 +736,19 @@
     window.handleEmployeeSubmit = async function(e) {
       e.preventDefault();
       const amountVal = parseFloat(document.getElementById('empAmount').value);
-      if (!amountVal || amountVal <= 0) return;
+      const dateVal = document.getElementById('empDate').value || 'غير محدد';
+      const paymentTypeVal = document.getElementById('empPaymentType').value;
+
+      if (!amountVal || amountVal <= 0) {
+        alert('الرجاء إدخال مبلغ صحيح');
+        return;
+      }
 
       const newRecord = {
         employeeName: document.getElementById('empName').value,
         amount: amountVal,
-        date: document.getElementById('empDate').value || getTodayString(),
-        paymentType: document.getElementById('empPaymentType').value,
+        date: paymentTypeVal === 'غير معروف' ? 'غير محدد' : dateVal,
+        paymentType: paymentTypeVal,
         clientName: document.getElementById('empAccount').value || 'غير محدد',
         notes: document.getElementById('empNotes').value || '-',
         timestamp: Date.now()
@@ -617,7 +781,7 @@
     };
 
     window.deleteItem = async function(id) {
-      if (confirm('هل ترغب في حذف هذه العملية من السيرفر المباشر؟')) {
+      if (confirm('Are you sure you want to delete this transaction?')) {
         if (window.CloudDB && window.CloudDB.db && window.CloudDB.auth.currentUser && !id.startsWith('col-')) {
           try {
             const { db, appId, doc, deleteDoc } = window.CloudDB;
@@ -636,7 +800,7 @@
 
     window.exportToCSV = function() {
       const filtered = getFilteredCollections();
-      const headers = ["التاريخ", "اسم الموظف", "المبلغ (ج.م)", "إثبات التحصيل", "Account Number", "ملاحظات"];
+      const headers = ["Date", "Employee", "Amount (EGP)", "Payment Type", "Account Number", "Notes"];
       const rows = filtered.map(c => [
         c.date, `"${c.employeeName}"`, c.amount, `"${c.paymentType}"`, `"${c.clientName}"`, `"${c.notes}"`
       ]);
