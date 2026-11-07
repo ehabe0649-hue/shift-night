@@ -34,10 +34,10 @@
     const db = getFirestore(app);
 
     window.CloudDB = {
-      db, auth, appId, collection, addDoc, onSnapshot, deleteDoc, doc, query, setDoc, getDoc
+      db, auth, appId, collection, addDoc, onSnapshot, deleteDoc, doc, query, setDoc, getDoc,
+      signInAnonymously: signInAnonymously 
     };
 
-    // تشغيل الاتصال بعد تحميل الصفحة
     window.addEventListener('load', () => {
       setTimeout(() => {
         if (window.initCloudSync) window.initCloudSync();
@@ -73,7 +73,6 @@
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
 
-    /* ستايل النشرة */
     @keyframes marquee {
       0% { transform: translateX(100%); }
       100% { transform: translateX(-100%); }
@@ -179,7 +178,6 @@
       try {
         await signInAnonymously(auth);
         
-        // 1. جلب البيانات (التحصيلات)
         const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'collections');
         onSnapshot(colRef, (snapshot) => {
           const cloudData = [];
@@ -193,7 +191,6 @@
           render();
         });
 
-        // 2. جلب بيانات النشرة (News Ticker)
         const tickerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'news_ticker');
         onSnapshot(tickerDocRef, (docSnap) => {
           if (docSnap.exists()) {
