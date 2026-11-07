@@ -56,8 +56,9 @@
       0% { transform: translateX(-100%); } 
       100% { transform: translateX(100%); } 
     }
-    .ticker-wrap { width: 100%; overflow: hidden; background: #b45309; color: white; padding: 10px 0; box-sizing: content-box; }
+    .ticker-wrap { width: 100%; overflow: hidden; background: #b45309; color: white; padding: 10px 0; box-sizing: content-box; position: relative; }
     .ticker { display: inline-block; white-space: nowrap; padding-left: 100%; animation: marquee var(--ticker-speed, 80s) linear infinite; font-weight: bold; font-size: 1.1rem; }
+    .ticker.stopped { animation: none; padding-left: 0; display: block; text-align: center; width: 100%; }
   </style>
 </head>
 <body class="theme-midnight min-h-screen custom-scrollbar">
@@ -102,16 +103,13 @@
       const todayStr = getTodayString();
       const monthStr = getTodayString().slice(0, 7);
 
-      if (dayOfMonth === 30) {
-        return { name: "Mohamed Maher", amount: 0, isMonthly: false, isLeader: true };
-      }
-
       let isMonthlyMode = dayOfMonth >= 21;
       let relevantCollections = isMonthlyMode 
         ? state.collections.filter(c => c.date.startsWith(monthStr))
         : state.collections.filter(c => c.date === todayStr);
 
-      if (relevantCollections.length === 0) return null;
+      // لو مفيش تحصيلات خالص، ومفيش يوم 30، نرجع null
+      if (relevantCollections.length === 0 && dayOfMonth !== 30) return null;
 
       const totalsByEmp = {};
       const notesByEmp = {};
@@ -127,10 +125,17 @@
         if (total > maxAmount) { maxAmount = total; heroName = name; }
       }
 
-      const heroNotes = notesByEmp[heroName] || '';
+      const heroNotes = heroName ? (notesByEmp[heroName] || '') : '';
       const isSedadMaher = heroNotes.includes('سداد ماهر');
+      const isDay30 = dayOfMonth === 30;
 
-      return { name: heroName, amount: maxAmount, isMonthly: isMonthlyMode, isSedadMaher: isSedadMaher, isLeader: false };
+      return { 
+        name: heroName || "لا يوجد تحصيل", 
+        amount: maxAmount, 
+        isMonthly: isMonthlyMode, 
+        isSedadMaher: isSedadMaher, 
+        isDay30: isDay30 
+      };
     };
 
     let state = {
@@ -140,7 +145,7 @@
       collections: JSON.parse(localStorage.getItem('shift_night_local_fallback')) || [],
       newsTicker: '',
       isTickerActive: false,
-      tickerSpeed: 80, // السرعة الافتراضية بالثواني
+      tickerSpeed: 80,
       dateRangeFilter: 'all',
       specificDate: getTodayString(),
       specificMonth: getTodayString().slice(0, 7),
@@ -220,13 +225,16 @@
       } catch (err) { console.error("Error updating ticker:", err); alert("حدث خطأ أثناء تحديث النشرة"); }
     };
 
-    // دالة تحديث سرعة النشرة من الشريط
     window.updateTickerSpeed = function(speed) {
       state.tickerSpeed = speed;
-      // تحديث الـ CSS فوراً عشان المدير يشوف التغيير
       const tickerElement = document.querySelector('.ticker');
       if (tickerElement) {
-        tickerElement.style.setProperty('--ticker-speed', `${speed}s`);
+        if (speed >= 120) {
+          tickerElement.classList.add('stopped');
+        } else {
+          tickerElement.classList.remove('stopped');
+          tickerElement.style.setProperty('--ticker-speed', `${speed}s`);
+        }
       }
     };
 
@@ -278,7 +286,7 @@
           
           ${state.isTickerActive && state.newsTicker ? `
             <div class="ticker-wrap">
-              <div class="ticker" style="--ticker-speed: ${state.tickerSpeed}s;">📢 ${state.newsTicker} 📢</div>
+              <div class="ticker ${state.tickerSpeed >= 120 ? 'stopped' : ''}" style="--ticker-speed: ${state.tickerSpeed}s;">📢 ${state.newsTicker} 📢</div>
             </div>
           ` : ''}
         </header>
@@ -296,45 +304,70 @@
       const hero = getHeroData();
       if (!hero) return '';
 
-      if (hero.isLeader) {
+      const title = hero.isMonthly ? "CHAMPION OF THE MONTH" : "HERO OF THE DAY";
+      const subtitle = hero.isMonthly ? "أعلى إجمالي تحصيل من أول الشهر" : "أعلى تحصيل لليوم";
+
+      // تحديد ما إذا كنا سنعرض صورتين أم لا
+      const showDoubleImage = hero.isDay30 || hero.isSedadMaher;
+
+      if (showDoubleImage) {
         return `
           <div class="mb-8 relative overflow-hidden glass-card rounded-3xl p-6 sm:p-8 border-2 border-amber-500/50 shadow-[0_0_40px_rgba(245,158,11,0.2)] bg-gradient-to-br from-slate-900 via-slate-900 to-amber-900/20">
-            <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 font-black text-xs px-4 py-1.5 rounded-bl-2xl shadow-lg z-10">LEADER APPRECIATION</div>
-            <div class="flex flex-col sm:flex-row items-center gap-6 relative z-0">
-              <div class="relative shrink-0">
-                <div class="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] overflow-hidden bg-slate-800 flex items-center justify-center">
-                  <img src="${getEmployeeImage(hero.name)}" alt="${hero.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
+            <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 font-black text-xs px-4 py-1.5 rounded-bl-2xl shadow-lg z-10">${title}</div>
+            
+            <div class="flex flex-col md:flex-row items-center justify-between gap-8 relative z-0">
+              
+              <!-- الجزء الخاص بالموظف (اليمين) -->
+              <div class="flex flex-col sm:flex-row items-center gap-6 flex-1">
+                <div class="relative shrink-0">
+                  <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] overflow-hidden bg-slate-800 flex items-center justify-center">
+                    <img src="${getEmployeeImage(hero.name)}" alt="${hero.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
+                  </div>
+                  <div class="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 font-black text-xl w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 shadow-lg">1</div>
+                </div>
+                <div class="text-center sm:text-right">
+                  <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">${subtitle}</p>
+                  <h2 class="text-2xl font-black text-white mb-2" dir="ltr">${hero.name}</h2>
+                  <p class="text-emerald-400 font-black text-xl mb-3" dir="ltr">${formatCurrency(hero.amount)} EGP</p>
                 </div>
               </div>
-              <div class="text-center sm:text-right flex-1">
-                <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">Thank You For Your Leadership</p>
-                <h2 class="text-3xl font-black text-white mb-2" dir="ltr">${hero.name}</h2>
-                <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">"Your guidance lights our way every night! 🌟"</p>
+
+              <!-- فاصل -->
+              <div class="hidden md:block w-px h-32 bg-amber-500/30"></div>
+
+              <!-- الجزء الخاص بالتيم ليدر (الشمال) -->
+              <div class="flex flex-col sm:flex-row items-center gap-6 flex-1 justify-end">
+                <div class="text-center sm:text-left order-2 sm:order-1">
+                  <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">Team Leader</p>
+                  <h2 class="text-2xl font-black text-white mb-2" dir="ltr">Mohamed Maher</h2>
+                  <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">"Keep up the great work! 🌟"</p>
+                </div>
+                <div class="relative shrink-0 order-1 sm:order-2">
+                  <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] overflow-hidden bg-slate-800 flex items-center justify-center">
+                    <img src="${getEmployeeImage('Mohamed Maher')}" alt="Mohamed Maher" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
+                  </div>
+                </div>
               </div>
+
             </div>
           </div>
         `;
       }
 
-      const title = hero.isMonthly ? "CHAMPION OF THE MONTH" : "HERO OF THE DAY";
-      const subtitle = hero.isMonthly ? "أعلى إجمالي تحصيل من أول الشهر" : "أعلى تحصيل لليوم";
-      const imageName = hero.isSedadMaher ? "Mohamed Maher" : hero.name;
-      const displayName = hero.name;
-
+      // الحالة العادية (صورة واحدة للموظف)
       return `
         <div class="mb-8 relative overflow-hidden glass-card rounded-3xl p-6 sm:p-8 border-2 border-amber-500/50 shadow-[0_0_40px_rgba(245,158,11,0.2)] bg-gradient-to-br from-slate-900 via-slate-900 to-amber-900/20">
           <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 font-black text-xs px-4 py-1.5 rounded-bl-2xl shadow-lg z-10">${title}</div>
           <div class="flex flex-col sm:flex-row items-center gap-6 relative z-0">
             <div class="relative shrink-0">
               <div class="w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] overflow-hidden bg-slate-800 flex items-center justify-center">
-                <img src="${getEmployeeImage(imageName)}" alt="${displayName}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
+                <img src="${getEmployeeImage(hero.name)}" alt="${hero.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
               </div>
               <div class="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 font-black text-xl w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 shadow-lg">1</div>
             </div>
             <div class="text-center sm:text-right flex-1">
               <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">${subtitle}</p>
-              <h2 class="text-3xl font-black text-white mb-2" dir="ltr">${displayName}</h2>
-              ${hero.isSedadMaher ? `<p class="text-emerald-400 font-bold text-sm mb-1">🏆 سداد ماهر - Mohamed Maher</p>` : ''}
+              <h2 class="text-3xl font-black text-white mb-2" dir="ltr">${hero.name}</h2>
               <p class="text-emerald-400 font-black text-xl mb-3" dir="ltr">${formatCurrency(hero.amount)} EGP</p>
               <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">"Champions keep playing until they get it right. Keep going! 🚀"</p>
             </div>
@@ -458,18 +491,17 @@
                 <button onclick="updateNewsTicker('', false, state.tickerSpeed)" class="bg-red-600 text-white font-bold text-sm px-4 py-3 rounded-xl">Hide ❌</button>
               </div>
 
-              <!-- شريط التحكم في السرعة -->
               <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mt-4">
-                <label class="block text-xs font-bold text-slate-300 mb-2">سرعة النشرة (كل ما تزيد القيمة، النشرة تبقى أبطأ) ⏱️</label>
+                <label class="block text-xs font-bold text-slate-300 mb-2">سرعة النشرة (كل ما تزيد القيمة، النشرة تبقى أبطأ، حتى تتوقف تماماً) ⏱️</label>
                 <div class="flex items-center gap-4">
                   <span class="text-xs text-emerald-400 font-bold">سريع</span>
-                  <input type="range" min="20" max="120" step="5" value="${state.tickerSpeed}" 
+                  <input type="range" min="20" max="120" step="10" value="${state.tickerSpeed}" 
                          oninput="updateTickerSpeed(this.value)" 
                          onchange="updateNewsTicker(document.getElementById('tickerInput').value, state.isTickerActive, this.value)"
                          class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500" />
-                  <span class="text-xs text-red-400 font-bold">بطيء</span>
+                  <span class="text-xs text-red-400 font-bold">متوقف</span>
                 </div>
-                <p class="text-center text-xs text-amber-400 font-bold mt-2">السرعة الحالية: <span id="speedDisplay">${state.tickerSpeed}</span> ثانية</p>
+                <p class="text-center text-xs text-amber-400 font-bold mt-2">السرعة الحالية: <span id="speedDisplay">${state.tickerSpeed >= 120 ? 'ثابتة (بدون حركة)' : state.tickerSpeed + ' ثانية'}</span></p>
               </div>
 
               <p class="text-xs text-slate-400 mt-2">Note: The ticker appears on all pages and is visible to all employees.</p>
