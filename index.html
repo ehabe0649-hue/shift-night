@@ -114,20 +114,53 @@
     const formatCurrency = (val) => (Number(val) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const getEmployeeImage = (name) => `https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/${name.replace(/ /g, '_')}.jpg`;
 
+    // دالة توليد صوت "الكاش" (صرف الفلوس) برمجياً - شغال 100% من غير ملفات خارجية
     function playNotificationMusic() {
       try {
-        const audio = new Audio('https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/notification.mp3');
-        audio.volume = 0.6;
-        audio.play().catch(e => console.log("Audio play error (Notification):", e));
-      } catch (e) { console.log("Audio error:", e); }
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        
+        // سيموله نغمة "تكّة" كاش
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.type = 'square'; // صوت حاد شبه "تكّة"
+        osc.frequency.setValueAtTime(1200, ctx.currentTime); // تردد عالي
+        osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.1); // ينزل بسرعة
+        
+        gain.gain.setValueAtTime(0.8, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.15);
+      } catch (e) { console.log("Audio play error:", e); }
     }
 
+    // دالة توليد موسيقى الاحتفال (نغمة أطول)
     function playCelebrationMusic() {
       try {
-        const audio = new Audio('https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/celebration.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(e => console.log("Audio play error (Celebration):", e));
-      } catch (e) { console.log("Audio error:", e); }
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.2);
+          gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.2);
+          gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + i * 0.2 + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.5);
+          osc.start(ctx.currentTime + i * 0.2);
+          osc.stop(ctx.currentTime + i * 0.2 + 0.5);
+        });
+      } catch (e) { console.log("Celebration audio error:", e); }
     }
 
     const getHeroData = () => {
@@ -472,324 +505,4 @@
                     <option value="" disabled selected>اختر نوع الإثبات...</option>
                     <option value="إيصال">إيصال</option>
                     <option value="اتصالات كاش">اتصالات كاش</option>
-                    <option value="مشكلة في الكاش">مشكلة في الكاش</option>
-                    <option value="غير معروف">غير معروف</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-extrabold text-amber-400 mb-2">Account Number *</label>
-                  <input type="text" id="empAccount" placeholder="Enter Account Number" class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3.5 text-sm outline-none font-mono text-right" required />
-                </div>
-              </div>
-              <div>
-                <label class="block text-xs font-extrabold text-slate-300 mb-2">ملاحظات (اختياري)</label>
-                <textarea id="empNotes" rows="2" placeholder="أي تفاصيل أخرى..." class="w-full bg-slate-900/90 border border-slate-700 text-slate-100 rounded-2xl p-3 text-sm outline-none"></textarea>
-              </div>
-              <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-4 rounded-2xl text-base shadow-xl">تأكيد وحفظ المبلغ 🚀</button>
-            </form>
-          </div>
-        `;
-      }
-
-      if (state.currentView === 'admin_login') {
-        return `
-          <div class="max-w-md mx-auto glass-card rounded-3xl shadow-2xl p-8 border border-slate-800">
-            <div class="text-center mb-6">
-              <h2 class="text-xl font-black text-amber-400">Team Leader Login</h2>
-              <p class="text-xs text-slate-400 mt-1">Enter your credentials to access the dashboard</p>
-            </div>
-            ${state.loginError ? `<div class="mb-4 bg-red-950/80 border border-red-800 text-red-300 p-3 rounded-xl text-xs font-bold">⚠️ ${state.loginError}</div>` : ''}
-            <form onsubmit="handleLoginSubmit(event)" class="space-y-4 text-left" dir="ltr">
-              <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1.5">Username</label>
-                <input type="text" id="loginUser" placeholder="Enter username" class="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" required />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1.5">Password</label>
-                <input type="password" id="loginPass" placeholder="Enter password" class="w-full bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" required />
-              </div>
-              <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black py-3.5 rounded-xl text-sm shadow-lg mt-2">Login</button>
-            </form>
-          </div>
-        `;
-      }
-
-      if (state.currentView === 'admin_dashboard' && state.isAdminLoggedIn) {
-        const filtered = getFilteredCollections();
-        const todayStr = getTodayString();
-        const todayTotal = state.collections.filter(c => c.date === todayStr).reduce((acc, curr) => acc + curr.amount, 0);
-        const filteredTotal = filtered.reduce((acc, curr) => acc + curr.amount, 0);
-        const overallTotal = state.collections.reduce((acc, curr) => acc + curr.amount, 0);
-        const summaries = INITIAL_EMPLOYEES.map(emp => {
-          const items = filtered.filter(c => c.employeeName === emp);
-          const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
-          return { name: emp, totalAmount, count: items.length };
-        }).sort((a, b) => b.totalAmount - a.totalAmount);
-
-        return `
-          <div class="space-y-6">
-            <div class="glass-card rounded-3xl p-6 flex flex-wrap justify-between items-center gap-4">
-              <div>
-                <h2 class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-emerald-300">Admin Dashboard 📊</h2>
-                <p class="text-xs text-slate-400 mt-0.5">Real-time monitoring of employee collections</p>
-              </div>
-              <button onclick="exportToCSV()" class="bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 text-xs font-black px-5 py-3 rounded-2xl shadow-lg">📥 Export CSV</button>
-            </div>
-            
-            <div class="glass-card p-6 rounded-3xl border border-amber-500/30">
-              <h3 class="text-sm font-bold text-amber-400 mb-3">📢 Manage News Ticker</h3>
-              
-              <div class="flex flex-col sm:flex-row gap-3 mb-4">
-                <input type="text" id="tickerInput" value="${state.newsTicker}" placeholder="Type your message here..." class="flex-1 bg-slate-900 border border-slate-700 text-slate-100 rounded-xl p-3 text-sm outline-none" />
-                <button onclick="updateNewsTicker(document.getElementById('tickerInput').value, true, state.tickerSpeed)" class="bg-emerald-600 text-white font-bold text-sm px-4 py-3 rounded-xl">Publish ✅</button>
-                <button onclick="updateNewsTicker('', false, state.tickerSpeed)" class="bg-red-600 text-white font-bold text-sm px-4 py-3 rounded-xl">Hide ❌</button>
-              </div>
-
-              <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-800 mt-4">
-                <label class="block text-xs font-bold text-slate-300 mb-2">سرعة النشرة (كل ما تزيد القيمة، النشرة تبقى أبطأ، حتى تتوقف تماماً) ⏱️</label>
-                <div class="flex items-center gap-4">
-                  <span class="text-xs text-emerald-400 font-bold">سريع</span>
-                  <input type="range" min="20" max="120" step="10" value="${state.tickerSpeed}" 
-                         oninput="updateTickerSpeed(this.value)" 
-                         onchange="updateNewsTicker(document.getElementById('tickerInput').value, state.isTickerActive, this.value)"
-                         class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500" />
-                  <span class="text-xs text-red-400 font-bold">متوقف</span>
-                </div>
-                <p class="text-center text-xs text-amber-400 font-bold mt-2">السرعة الحالية: <span id="speedDisplay">${state.tickerSpeed >= 120 ? 'ثابتة (بدون حركة)' : state.tickerSpeed + ' ثانية'}</span></p>
-              </div>
-
-              <p class="text-xs text-slate-400 mt-2">Note: The ticker appears on all pages and is visible to all employees.</p>
-            </div>
-
-            <div class="glass-card p-6 rounded-3xl space-y-4">
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label class="block text-xs font-bold text-amber-400 mb-1.5">👤 Filter by Employee</label>
-                  <select onchange="changeFilter('selectedEmployeeFilter', this.value)" class="w-full bg-slate-900 border border-amber-500/40 text-xs rounded-xl p-3 font-bold text-slate-100 outline-none">
-                    <option value="all" ${state.selectedEmployeeFilter === 'all' ? 'selected' : ''}>All Employees</option>
-                    ${INITIAL_EMPLOYEES.map(emp => `<option value="${emp}" ${state.selectedEmployeeFilter === emp ? 'selected' : ''}>${emp}</option>`).join('')}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-bold text-slate-300 mb-1.5">Date Range</label>
-                  <select onchange="changeFilter('dateRangeFilter', this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 font-bold text-slate-100 outline-none">
-                    <option value="all" ${state.dateRangeFilter === 'all' ? 'selected' : ''}>All Time</option>
-                    <option value="today" ${state.dateRangeFilter === 'today' ? 'selected' : ''}>Today</option>
-                    <option value="specific_day" ${state.dateRangeFilter === 'specific_day' ? 'selected' : ''}>Specific Day</option>
-                    <option value="month" ${state.dateRangeFilter === 'month' ? 'selected' : ''}>Full Month</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-bold text-slate-300 mb-1.5">Search</label>
-                  <input type="text" value="${state.searchQuery}" placeholder="Search..." oninput="changeFilter('searchQuery', this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 text-slate-100 outline-none" />
-                </div>
-              </div>
-              ${state.dateRangeFilter === 'specific_day' || state.dateRangeFilter === 'month' ? `
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-800">
-                  ${state.dateRangeFilter === 'specific_day' ? `<div><label class="block text-xs font-bold text-amber-400 mb-1">Select Day</label><input type="date" value="${state.specificDate}" onchange="changeFilter('specificDate', this.value)" class="w-full bg-slate-900 border border-amber-500/50 text-xs rounded-xl p-2.5 font-bold text-slate-100" /></div>` : ''}
-                  ${state.dateRangeFilter === 'month' ? `<div><label class="block text-xs font-bold text-amber-400 mb-1">Select Month</label><input type="month" value="${state.specificMonth}" onchange="changeFilter('specificMonth', this.value)" class="w-full bg-slate-900 border border-amber-500/50 text-xs rounded-xl p-2.5 font-bold text-slate-100" /></div>` : ''}
-                </div>
-              ` : ''}
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <div class="glass-card p-6 rounded-3xl border-r-4 border-r-emerald-500"><span class="text-xs font-bold text-slate-400">Today's Collections</span><h3 class="text-2xl font-black text-emerald-400 mt-2">${formatCurrency(todayTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3></div>
-              <div class="glass-card p-6 rounded-3xl border-r-4 border-r-amber-500"><span class="text-xs font-bold text-amber-400">Filtered Total ${state.selectedEmployeeFilter !== 'all' ? `(${state.selectedEmployeeFilter})` : ''}</span><h3 class="text-2xl font-black text-amber-400 mt-2">${formatCurrency(filteredTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3><span class="text-[11px] text-slate-400 font-bold mt-1 block">Transactions: ${filtered.length}</span></div>
-              <div class="glass-card p-6 rounded-3xl border-r-4 border-r-indigo-500"><span class="text-xs font-bold text-slate-400">Overall Total</span><h3 class="text-2xl font-black text-slate-100 mt-2">${formatCurrency(overallTotal)} <span class="text-xs text-slate-400 font-bold">EGP</span></h3></div>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div class="lg:col-span-2 glass-card p-6 rounded-3xl"><h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>📈</span> Top Performers</h3><div class="h-64 relative"><canvas id="barChart"></canvas></div></div>
-              <div class="glass-card p-6 rounded-3xl"><h3 class="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span>🍩</span> Payment Methods</h3><div class="h-64 relative"><canvas id="pieChart"></canvas></div></div>
-            </div>
-            <div class="glass-card rounded-3xl overflow-hidden">
-              <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800 flex justify-between items-center"><span>Employee Performance Report</span></div>
-              <div class="overflow-x-auto">
-                <table class="w-full text-right text-sm">
-                  <thead class="bg-slate-900/90 text-slate-400 text-xs border-b border-slate-800"><tr><th class="p-3.5">#</th><th class="p-3.5">Employee</th><th class="p-3.5">Total Amount</th><th class="p-3.5">Payments Count</th><th class="p-3.5">Action</th></tr></thead>
-                  <tbody class="divide-y divide-slate-800/60">
-                    ${summaries.map((emp, i) => `
-                      <tr class="hover:bg-slate-800/40 transition-colors ${state.selectedEmployeeFilter === emp.name ? 'bg-amber-500/10' : ''}">
-                        <td class="p-3.5 text-xs text-slate-500 font-bold">${i + 1}</td>
-                        <td class="p-3.5 font-bold text-slate-200">${emp.name}</td>
-                        <td class="p-3.5 text-emerald-400 font-black">${emp.totalAmount > 0 ? `${formatCurrency(emp.totalAmount)} EGP` : '-'}</td>
-                        <td class="p-3.5 text-xs text-slate-400 font-semibold">${emp.count} ops</td>
-                        <td class="p-3.5"><button onclick="changeFilter('selectedEmployeeFilter', '${emp.name}')" class="text-xs bg-slate-800 text-amber-400 border border-slate-700 font-bold px-3 py-1.5 rounded-xl">Filter</button></td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div class="glass-card rounded-3xl overflow-hidden">
-              <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800">Live Transactions (${filtered.length} ops)</div>
-              <div class="overflow-x-auto max-h-[450px] custom-scrollbar">
-                <table class="w-full text-right text-sm">
-                  <thead class="bg-slate-900/90 text-slate-400 text-xs sticky top-0 border-b border-slate-800 z-10"><tr><th class="p-3.5">Date</th><th class="p-3.5">Employee</th><th class="p-3.5">Amount</th><th class="p-3.5">Account Number</th><th class="p-3.5">Payment Type</th><th class="p-3.5">Notes</th><th class="p-3.5">Delete</th></tr></thead>
-                  <tbody class="divide-y divide-slate-800/60">
-                    ${filtered.map(row => `
-                      <tr class="hover:bg-slate-800/40">
-                        <td class="p-3.5 text-xs text-slate-400 font-mono">${row.date}</td>
-                        <td class="p-3.5 font-bold text-slate-200">${row.employeeName}</td>
-                        <td class="p-3.5 font-black text-emerald-400">${formatCurrency(row.amount)} EGP</td>
-                        <td class="p-3.5 text-slate-300 font-mono text-lg font-bold">${row.clientName}</td>
-                        <td class="p-3.5 text-xs font-bold text-slate-300">${row.paymentType}</td>
-                        <td class="p-3.5 text-xs text-slate-400 max-w-[200px] truncate" title="${row.notes}">${row.notes}</td>
-                        <td class="p-3.5"><button onclick="deleteItem('${row.id}')" class="text-red-400 font-bold text-xs bg-red-950/40 border border-red-800/50 px-2.5 py-1 rounded-lg">Delete</button></td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-    }
-
-    function getFilteredCollections() {
-      const todayStr = getTodayString();
-      return state.collections.filter(item => {
-        if (state.selectedEmployeeFilter !== 'all' && item.employeeName !== state.selectedEmployeeFilter) return false;
-        if (state.searchQuery.trim() !== '') {
-          const query = state.searchQuery.toLowerCase();
-          const matchClient = (item.clientName || '').toLowerCase().includes(query);
-          const matchNotes = (item.notes || '').toLowerCase().includes(query);
-          const matchEmp = (item.employeeName || '').toLowerCase().includes(query);
-          if (!matchClient && !matchNotes && !matchEmp) return false;
-        }
-        if (state.dateRangeFilter === 'today') return item.date === todayStr;
-        if (state.dateRangeFilter === 'specific_day') return item.date === state.specificDate;
-        if (state.dateRangeFilter === 'month') return item.date.startsWith(state.specificMonth);
-        return true;
-      });
-    }
-
-    let barChartInstance = null;
-    let pieChartInstance = null;
-
-    function initCharts() {
-      setTimeout(() => {
-        const filtered = getFilteredCollections();
-        const empTotals = INITIAL_EMPLOYEES.map(emp => {
-          const sum = filtered.filter(c => c.employeeName === emp).reduce((a, b) => a + b.amount, 0);
-          return { name: emp, sum };
-        }).sort((a, b) => b.sum - a.sum).slice(0, 7);
-
-        const barCanvas = document.getElementById('barChart');
-        if (barCanvas) {
-          if (barChartInstance) barChartInstance.destroy();
-          barChartInstance = new Chart(barCanvas, {
-            type: 'bar',
-            data: { labels: empTotals.map(e => e.name), datasets: [{ label: 'Amount (EGP)', data: empTotals.map(e => e.sum), backgroundColor: '#f59e0b', borderRadius: 8 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-          });
-        }
-
-        const paymentCounts = { 'إيصال': 0, 'اتصالات كاش': 0, 'غير معروف': 0, 'مشكلة في الكاش': 0 };
-        filtered.forEach(c => { if (paymentCounts[c.paymentType] !== undefined) paymentCounts[c.paymentType] += c.amount; });
-
-        const pieCanvas = document.getElementById('pieChart');
-        if (pieCanvas) {
-          if (pieChartInstance) pieChartInstance.destroy();
-          pieChartInstance = new Chart(pieCanvas, {
-            type: 'doughnut',
-            data: { labels: Object.keys(paymentCounts), datasets: [{ data: Object.values(paymentCounts), backgroundColor: ['#10b981', '#3b82f6', '#ef4444', '#64748b'] }] },
-            options: { responsive: true, maintainAspectRatio: false }
-          });
-        }
-      }, 100);
-    }
-
-    window.navigate = function(view) { state.currentView = view; render(); };
-    window.logoutAdmin = function() { state.isAdminLoggedIn = false; state.currentView = 'employee'; render(); };
-
-    window.handleLoginSubmit = function(e) {
-      e.preventDefault();
-      const user = document.getElementById('loginUser').value;
-      const pass = document.getElementById('loginPass').value;
-      if (user === 'admin' && pass === 'admin123') {
-        state.isAdminLoggedIn = true;
-        state.currentView = 'admin_dashboard';
-        state.loginError = '';
-      } else {
-        state.loginError = 'Invalid username or password!';
-      }
-      render();
-    };
-
-    window.changeFilter = function(key, value) { state[key] = value; render(); };
-
-    window.handleEmployeeSubmit = async function(e) {
-      e.preventDefault();
-      const amountVal = parseFloat(document.getElementById('empAmount').value);
-      const dateVal = document.getElementById('empDate').value || 'غير محدد';
-      const paymentTypeVal = document.getElementById('empPaymentType').value;
-
-      if (!amountVal || amountVal <= 0) { alert('الرجاء إدخال مبلغ صحيح'); return; }
-
-      const newRecord = {
-        employeeName: document.getElementById('empName').value,
-        amount: amountVal,
-        date: paymentTypeVal === 'غير معروف' ? 'غير محدد' : dateVal,
-        paymentType: paymentTypeVal,
-        clientName: document.getElementById('empAccount').value || 'غير محدد',
-        notes: document.getElementById('empNotes').value || '-',
-        timestamp: Date.now()
-      };
-
-      if (window.CloudDB && window.CloudDB.db && window.CloudDB.auth.currentUser) {
-        try {
-          const { db, appId, collection, addDoc } = window.CloudDB;
-          const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'collections');
-          await addDoc(colRef, newRecord);
-        } catch (err) {
-          console.error("Cloud insert error:", err);
-          newRecord.id = `col-${Date.now()}`;
-          state.collections.unshift(newRecord);
-          saveCollectionsLocally();
-        }
-      } else {
-        newRecord.id = `col-${Date.now()}`;
-        state.collections.unshift(newRecord);
-        saveCollectionsLocally();
-      }
-
-      state.employeeSuccessMsg = `تم إرسال مبلغ ${formatCurrency(amountVal)} ج.م سحابياً بنجاح! 🎉`;
-      render();
-      setTimeout(() => { state.employeeSuccessMsg = ''; render(); }, 4000);
-    };
-
-    window.deleteItem = async function(id) {
-      if (confirm('Are you sure you want to delete this transaction?')) {
-        if (window.CloudDB && window.CloudDB.db && window.CloudDB.auth.currentUser && !id.startsWith('col-')) {
-          try {
-            const { db, appId, doc, deleteDoc } = window.CloudDB;
-            const itemRef = doc(db, 'artifacts', appId, 'public', 'data', 'collections', id);
-            await deleteDoc(itemRef);
-          } catch (err) { console.error("Cloud delete error:", err); }
-        } else {
-          state.collections = state.collections.filter(c => c.id !== id);
-          saveCollectionsLocally();
-          render();
-        }
-      }
-    };
-
-    window.exportToCSV = function() {
-      const filtered = getFilteredCollections();
-      const headers = ["Date", "Employee", "Amount (EGP)", "Payment Type", "Account Number", "Notes"];
-      const rows = filtered.map(c => [c.date, `"${c.employeeName}"`, c.amount, `"${c.paymentType}"`, `"${c.clientName}"`, `"${c.notes}"`]);
-      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `Shift_Night_Report_${getTodayString()}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    };
-
-    window.onload = render;
-  </script>
-</body>
-</html>
+                    <option value="مشكلة في الك
