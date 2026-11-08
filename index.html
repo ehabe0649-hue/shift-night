@@ -60,7 +60,6 @@
     .ticker { display: inline-block; white-space: nowrap; padding-left: 100%; animation: marquee var(--ticker-speed, 80s) linear infinite; font-weight: bold; font-size: 1.1rem; }
     .ticker.stopped { animation: none; padding-left: 0; display: block; text-align: center; width: 100%; }
 
-    /* تنسيق الغلاف الاحتفالي */
     #celebrationOverlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(2, 6, 23, 0.95); z-index: 9999;
@@ -75,7 +74,6 @@
 
   <div id="app"></div>
 
-  <!-- الغلاف الاحتفالي (مخفي في البداية) -->
   <div id="celebrationOverlay">
     <h1 class="text-4xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-emerald-400 mb-6 drop-shadow-lg">
       🎉 نهاية الشهر سعيدة 🎉
@@ -116,21 +114,47 @@
     const formatCurrency = (val) => (Number(val) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const getEmployeeImage = (name) => `https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/${name.replace(/ /g, '_')}.jpg`;
 
-    // تشغيل الصوت من ملف خارجي (MP3)
+    // دالة توليد نغمة الإشعارات (دينج)
     function playNotificationMusic() {
       try {
-        const audio = new Audio('https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/notification.mp3');
-        audio.volume = 0.6;
-        audio.play().catch(e => console.log("Audio play error (Notification):", e));
-      } catch (e) { console.log("Audio error:", e); }
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime); 
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1); 
+        gain.gain.setValueAtTime(0.5, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.5);
+      } catch (e) { console.log("Audio play error:", e); }
     }
 
+    // دالة توليد موسيقى الاحتفال (نغمة أطول)
     function playCelebrationMusic() {
       try {
-        const audio = new Audio('https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/celebration.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(e => console.log("Audio play error (Celebration):", e));
-      } catch (e) { console.log("Audio error:", e); }
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'triangle'; // صوت أنعم
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.2);
+          gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.2);
+          gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + i * 0.2 + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.5);
+          osc.start(ctx.currentTime + i * 0.2);
+          osc.stop(ctx.currentTime + i * 0.2 + 0.5);
+        });
+      } catch (e) { console.log("Celebration audio error:", e); }
     }
 
     const getHeroData = () => {
@@ -168,7 +192,6 @@
       };
     };
 
-    // دالة التحقق من وقت الاحتفال (يوم 30 بعد 9:30 مساءً)
     function checkCelebrationTime() {
       const now = new Date();
       const day = now.getDate();
@@ -180,7 +203,6 @@
       }
     }
 
-    // دالة عرض الغلاف الاحتفالي
     function showCelebration() {
       const overlay = document.getElementById('celebrationOverlay');
       if (overlay.classList.contains('show')) return;
@@ -200,7 +222,7 @@
       }
       
       overlay.classList.add('show');
-      playCelebrationMusic(); // موسيقى احتفالية
+      playCelebrationMusic();
     }
 
     let state = {
@@ -364,7 +386,7 @@
 
       if (state.currentView === 'admin_dashboard' && state.isAdminLoggedIn) {
         initCharts();
-        checkCelebrationTime(); // فحص وقت الاحتفال
+        checkCelebrationTime();
       }
     }
 
