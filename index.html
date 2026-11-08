@@ -114,21 +114,21 @@
     const formatCurrency = (val) => (Number(val) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const getEmployeeImage = (name) => `https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/${name.replace(/ /g, '_')}.jpg`;
 
-    // دالة صوت الكاش (صرف الفلوس) - مولدة برمجياً
+    // نغمة "صرف الكاش" - مولدة برمجياً
     function playNotificationMusic() {
       try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         if (!AudioContext) return;
         const ctx = new AudioContext();
         
-        // نغمة "تكّة كاش"
+        // صوت تكّة الكاش
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         
         osc.connect(gain);
         gain.connect(ctx.destination);
         
-        osc.type = 'square'; // صوت حاد
+        osc.type = 'square'; 
         osc.frequency.setValueAtTime(1200, ctx.currentTime); 
         osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.1); 
         
@@ -739,12 +739,12 @@
       e.preventDefault();
       const user = document.getElementById('loginUser').value;
       const pass = document.getElementById('loginPass').value;
-      if (user === 'admin' && pass === 'admin123') {
+      if (user === 'MAHER123' && pass === 'EBM123456') {
         state.isAdminLoggedIn = true;
         state.currentView = 'admin_dashboard';
         state.loginError = '';
       } else {
-        state.loginError = 'Invalid username or password!';
+        state.loginError = 'اسم المستخدم أو كلمة السر غير صحيحة!';
       }
       render();
     };
