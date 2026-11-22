@@ -234,6 +234,8 @@
       specificDate: getTodayString(),
       specificMonth: getTodayString().slice(0, 7),
       selectedEmployeeFilter: 'all',
+      paymentTypeFilter: 'all',
+      selectedTransactionIds: [],
       searchQuery: '',
       loginError: '',
       employeeSuccessMsg: '',
@@ -388,51 +390,47 @@
     }
 
     function renderHero() {
-      const hero = getHeroData();
-      if (!hero) return '';
+      const today = new Date();
+      const monthStr = getTodayString().slice(0, 7);
 
-      const title = hero.isMonthly ? "CHAMPION OF THE MONTH" : "HERO OF THE DAY";
-      const subtitle = hero.isMonthly ? "أعلى إجمالي تحصيل من أول الشهر" : "أعلى تحصيل لليوم";
+      // From the 21st onward, show monthly champions as images only (no names or amounts).
+      if (today.getDate() >= 21) {
+        const monthlyItems = state.collections.filter(c => (c.date || '').startsWith(monthStr));
+        const byEmployee = {};
+        monthlyItems.forEach(item => {
+          if (!byEmployee[item.employeeName]) byEmployee[item.employeeName] = { name: item.employeeName, total: 0, count: 0 };
+          byEmployee[item.employeeName].total += Number(item.amount) || 0;
+          byEmployee[item.employeeName].count += 1;
+        });
+        const rankings = Object.values(byEmployee);
+        const firstMonthly = [...rankings].sort((a, b) => b.total - a.total)[0];
+        const secondMonthly = [...rankings].sort((a, b) => b.total - a.total)[1];
+        const mostTransactions = [...rankings].sort((a, b) => b.count - a.count || b.total - a.total)[0];
 
-      if (hero.isDay30) {
-        return `
-          <div class="mb-8 relative overflow-hidden glass-card rounded-3xl p-6 sm:p-8 border-2 border-amber-500/50 shadow-[0_0_40px_rgba(245,158,11,0.2)] bg-gradient-to-br from-slate-900 via-slate-900 to-amber-900/20">
-            <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 font-black text-xs px-4 py-1.5 rounded-bl-2xl shadow-lg z-10">END OF MONTH CELEBRATION</div>
-            
-            <div class="flex flex-col md:flex-row items-center justify-between gap-8 relative z-0">
-              <div class="flex flex-col sm:flex-row items-center gap-6 flex-1">
-                <div class="relative shrink-0">
-                  <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] overflow-hidden bg-slate-800 flex items-center justify-center">
-                    <img src="${getEmployeeImage(hero.name)}" alt="${hero.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
-                  </div>
-                  <div class="absolute -bottom-2 -right-2 bg-amber-500 text-slate-950 font-black text-xl w-10 h-10 rounded-full flex items-center justify-center border-4 border-slate-900 shadow-lg">1</div>
-                </div>
-                <div class="text-center sm:text-right">
-                  <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">Top Performer</p>
-                  <h2 class="text-2xl font-black text-white mb-2" dir="ltr">${hero.name}</h2>
-                  <p class="text-emerald-400 font-black text-xl mb-3" dir="ltr">${formatCurrency(hero.amount)} EGP</p>
-                </div>
-              </div>
-
-              <div class="hidden md:block w-px h-32 bg-amber-500/30"></div>
-
-              <div class="flex flex-col sm:flex-row items-center gap-6 flex-1 justify-end">
-                <div class="text-center sm:text-left order-2 sm:order-1">
-                  <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">Team Leader</p>
-                  <h2 class="text-2xl font-black text-white mb-2" dir="ltr">Mohamed Maher</h2>
-                  <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">"Great job team! 🌟"</p>
-                </div>
-                <div class="relative shrink-0 order-1 sm:order-2">
-                  <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)] overflow-hidden bg-slate-800 flex items-center justify-center">
-                    <img src="${getEmployeeImage('Mohamed Maher')}" alt="Mohamed Maher" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-4xl\\'>👤</span>';" />
-                  </div>
-                </div>
-              </div>
+        const imageCard = (person, label, medal) => `
+          <div class="glass-card rounded-3xl p-5 flex flex-col items-center justify-center border border-amber-500/30 min-h-[190px]">
+            <p class="text-amber-400 font-black text-sm mb-4">${label}</p>
+            <div class="w-28 h-28 sm:w-36 sm:h-36 rounded-full border-4 border-amber-500 overflow-hidden bg-slate-800 shadow-[0_0_24px_rgba(245,158,11,0.25)] flex items-center justify-center">
+              ${person ? `<img src="${getEmployeeImage(person.name)}" alt="${label}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-5xl\\'>🏆</span>';" />` : `<span class="text-5xl">🏆</span>`}
             </div>
-          </div>
-        `;
+            <span class="mt-3 text-2xl">${medal}</span>
+          </div>`;
+        return `
+          <section class="mb-8">
+            <h2 class="text-center text-xl sm:text-2xl font-black text-amber-400 mb-5">🏆 أبطال الشهر</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              ${imageCard(firstMonthly, '🥇 أول شهري', '🥇')}
+              ${imageCard(secondMonthly, '🥈 تاني شهري', '🥈')}
+              ${imageCard(mostTransactions, '🔥 أكبر عدد معاملات حتى اليوم', '🔥')}
+            </div>
+          </section>`;
       }
 
+      // Daily champion remains as before, including the daily total amount.
+      const hero = getHeroData();
+      if (!hero) return '';
+      const title = "FIRST COLLECTION OF THE DAY";
+      const subtitle = "أعلى تحصيل لليوم";
       return `
         <div class="mb-8 relative overflow-hidden glass-card rounded-3xl p-6 sm:p-8 border-2 border-amber-500/50 shadow-[0_0_40px_rgba(245,158,11,0.2)] bg-gradient-to-br from-slate-900 via-slate-900 to-amber-900/20">
           <div class="absolute top-0 right-0 bg-amber-500 text-slate-950 font-black text-xs px-4 py-1.5 rounded-bl-2xl shadow-lg z-10">${title}</div>
@@ -450,8 +448,7 @@
               <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">"Champions keep playing until they get it right. Keep going! 🚀"</p>
             </div>
           </div>
-        </div>
-      `;
+        </div>`;
     }
 
     window.handlePaymentTypeChange = function() {
@@ -586,7 +583,7 @@
             </div>
 
             <div class="glass-card p-6 rounded-3xl space-y-4">
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label class="block text-xs font-bold text-amber-400 mb-1.5">👤 Filter by Employee</label>
                   <select onchange="changeFilter('selectedEmployeeFilter', this.value)" class="w-full bg-slate-900 border border-amber-500/40 text-xs rounded-xl p-3 font-bold text-slate-100 outline-none">
@@ -601,6 +598,16 @@
                     <option value="today" ${state.dateRangeFilter === 'today' ? 'selected' : ''}>Today</option>
                     <option value="specific_day" ${state.dateRangeFilter === 'specific_day' ? 'selected' : ''}>Specific Day</option>
                     <option value="month" ${state.dateRangeFilter === 'month' ? 'selected' : ''}>Full Month</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-300 mb-1.5">إثباتات التحصيل</label>
+                  <select onchange="changeFilter('paymentTypeFilter', this.value)" class="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl p-3 font-bold text-slate-100 outline-none">
+                    <option value="all" ${state.paymentTypeFilter === 'all' ? 'selected' : ''}>كل الإثباتات</option>
+                    <option value="إيصال" ${state.paymentTypeFilter === 'إيصال' ? 'selected' : ''}>إيصال</option>
+                    <option value="اتصالات كاش" ${state.paymentTypeFilter === 'اتصالات كاش' ? 'selected' : ''}>اتصالات كاش</option>
+                    <option value="مشكلة في الكاش" ${state.paymentTypeFilter === 'مشكلة في الكاش' ? 'selected' : ''}>مشكلة في الكاش</option>
+                    <option value="غير معروف" ${state.paymentTypeFilter === 'غير معروف' ? 'selected' : ''}>غير معروف</option>
                   </select>
                 </div>
                 <div>
@@ -643,14 +650,25 @@
                 </table>
               </div>
             </div>
+            <div class="glass-card rounded-3xl p-4 flex flex-wrap items-center justify-between gap-3">
+              <div class="text-xs text-slate-300 font-bold">
+                ${state.dateRangeFilter === 'specific_day' ? `اليوم المحدد: <span class="text-amber-400">${state.specificDate}</span> — المحدد: <span class="text-emerald-400">${state.selectedTransactionIds.length}</span> معاملة` : 'لاستخدام الحذف الجماعي، اختر Specific Day وحدد التاريخ أولاً'}
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button onclick="toggleAllVisibleTransactions(true)" ${state.dateRangeFilter !== 'specific_day' || filtered.length === 0 ? 'disabled' : ''} class="bg-slate-700 disabled:opacity-40 text-white text-xs font-black px-4 py-2.5 rounded-xl">تحديد الكل</button>
+                <button onclick="toggleAllVisibleTransactions(false)" ${state.selectedTransactionIds.length === 0 ? 'disabled' : ''} class="bg-slate-700 disabled:opacity-40 text-white text-xs font-black px-4 py-2.5 rounded-xl">إلغاء التحديد</button>
+                <button onclick="deleteSelectedTransactions()" ${state.dateRangeFilter !== 'specific_day' || state.selectedTransactionIds.length === 0 ? 'disabled' : ''} class="bg-red-700 disabled:opacity-40 text-white text-xs font-black px-4 py-2.5 rounded-xl">حذف المحدد (${state.selectedTransactionIds.length})</button>
+              </div>
+            </div>
             <div class="glass-card rounded-3xl overflow-hidden">
               <div class="p-5 bg-slate-900/80 font-bold text-amber-400 border-b border-slate-800">Live Transactions (${filtered.length} ops)</div>
               <div class="overflow-x-auto max-h-[450px] custom-scrollbar">
                 <table class="w-full text-right text-sm">
-                  <thead class="bg-slate-900/90 text-slate-400 text-xs sticky top-0 border-b border-slate-800 z-10"><tr><th class="p-3.5">Date</th><th class="p-3.5">Employee</th><th class="p-3.5">Amount</th><th class="p-3.5">Account Number</th><th class="p-3.5">Payment Type</th><th class="p-3.5">Notes</th><th class="p-3.5">Delete</th></tr></thead>
+                  <thead class="bg-slate-900/90 text-slate-400 text-xs sticky top-0 border-b border-slate-800 z-10"><tr><th class="p-3.5">تحديد</th><th class="p-3.5">Date</th><th class="p-3.5">Employee</th><th class="p-3.5">Amount</th><th class="p-3.5">Account Number</th><th class="p-3.5">Payment Type</th><th class="p-3.5">Notes</th><th class="p-3.5">Delete</th></tr></thead>
                   <tbody class="divide-y divide-slate-800/60">
                     ${filtered.map(row => `
                       <tr class="hover:bg-slate-800/40">
+                        <td class="p-3.5"><input type="checkbox" ${state.selectedTransactionIds.includes(row.id) ? 'checked' : ''} onchange="toggleTransactionSelection('${row.id}', this.checked)" /></td>
                         <td class="p-3.5 text-xs text-slate-400 font-mono">${row.date}</td>
                         <td class="p-3.5 font-bold text-slate-200">${row.employeeName}</td>
                         <td class="p-3.5 font-black text-emerald-400">${formatCurrency(row.amount)} EGP</td>
@@ -673,6 +691,7 @@
       const todayStr = getTodayString();
       return state.collections.filter(item => {
         if (state.selectedEmployeeFilter !== 'all' && item.employeeName !== state.selectedEmployeeFilter) return false;
+        if (state.paymentTypeFilter !== 'all' && item.paymentType !== state.paymentTypeFilter) return false;
         if (state.searchQuery.trim() !== '') {
           const query = state.searchQuery.toLowerCase();
           const matchClient = (item.clientName || '').toLowerCase().includes(query);
@@ -740,7 +759,67 @@
       render();
     };
 
-    window.changeFilter = function(key, value) { state[key] = value; render(); };
+    window.changeFilter = function(key, value) {
+      state[key] = value;
+      if (['dateRangeFilter', 'specificDate', 'selectedEmployeeFilter', 'paymentTypeFilter', 'searchQuery'].includes(key)) state.selectedTransactionIds = [];
+      render();
+    };
+
+    window.toggleTransactionSelection = function(id, checked) {
+      if (checked && !state.selectedTransactionIds.includes(id)) state.selectedTransactionIds.push(id);
+      if (!checked) state.selectedTransactionIds = state.selectedTransactionIds.filter(itemId => itemId !== id);
+      render();
+    };
+
+    window.toggleAllVisibleTransactions = function(checked) {
+      if (state.dateRangeFilter !== 'specific_day') return;
+      const visibleIds = getFilteredCollections().map(item => item.id);
+      state.selectedTransactionIds = checked
+        ? [...new Set([...state.selectedTransactionIds, ...visibleIds])]
+        : state.selectedTransactionIds.filter(id => !visibleIds.includes(id));
+      render();
+    };
+
+    window.deleteSelectedTransactions = async function() {
+      if (state.dateRangeFilter !== 'specific_day' || !state.specificDate) {
+        alert('اختار يوم محدد الأول قبل الحذف الجماعي.');
+        return;
+      }
+      const selected = getFilteredCollections().filter(item =>
+        state.selectedTransactionIds.includes(item.id) && item.date === state.specificDate
+      );
+      if (!selected.length) {
+        alert('مفيش معاملات محددة للحذف في اليوم ده.');
+        return;
+      }
+      if (!confirm(`تأكيد حذف ${selected.length} معاملة من يوم ${state.specificDate}؟ لا يمكن التراجع عن الحذف.`)) return;
+
+      const cloudItems = selected.filter(item => item.id && !String(item.id).startsWith('col-'));
+      const localItems = selected.filter(item => !item.id || String(item.id).startsWith('col-'));
+
+      try {
+        if (cloudItems.length && window.CloudDB && window.CloudDB.db && window.CloudDB.auth.currentUser) {
+          const { db, appId, doc, deleteDoc } = window.CloudDB;
+          await Promise.all(cloudItems.map(item =>
+            deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collections', item.id))
+          ));
+        } else if (cloudItems.length) {
+          throw new Error('Cloud connection unavailable; bulk cloud delete cancelled.');
+        }
+
+        if (localItems.length) {
+          const ids = new Set(localItems.map(item => item.id));
+          state.collections = state.collections.filter(item => !ids.has(item.id));
+          saveCollectionsLocally();
+        }
+        state.selectedTransactionIds = [];
+        render();
+        alert(`تم إرسال طلب حذف ${selected.length} معاملة.`);
+      } catch (err) {
+        console.error('Bulk delete error:', err);
+        alert('حصلت مشكلة أثناء الحذف. راجع الاتصال وحاول مرة أخرى.');
+      }
+    };
 
     window.handleEmployeeSubmit = async function(e) {
       e.preventDefault();
