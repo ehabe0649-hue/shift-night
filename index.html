@@ -110,7 +110,7 @@
       "Salsabel Mahmoud", "Seif Tamer", "Shahd Mohamed", "Youssef Gaber", "Youssef Mohamed"
     ];
 
-    const getTodayString = () => new Date().toISOString().split('T')[0];
+    const getTodayString = () => { const d = new Date(); const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${day}`; };
     const formatCurrency = (val) => (Number(val) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const getEmployeeImage = (name) => `https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/${name.replace(/ /g, '_')}.jpg`;
 
@@ -171,7 +171,7 @@
       const totalsByEmp = {};
       relevantCollections.forEach(c => {
         if (!totalsByEmp[c.employeeName]) { totalsByEmp[c.employeeName] = 0; }
-        totalsByEmp[c.employeeName] += c.amount;
+        totalsByEmp[c.employeeName] += Number(c.amount) || 0;
       });
 
       let heroName = null;
