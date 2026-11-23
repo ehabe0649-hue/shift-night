@@ -704,22 +704,20 @@
           </section>`;
       }
 
-      // أول تحصيل يومي يظل مستقلاً ويظهر طوال الشهر، ولا يتوقف يوم 21.
-      // نعتمد على تاريخ المعاملة، ونستخدم timestamp كاحتياط للسجلات التي لا تحتوي تاريخاً صالحاً.
-      const dailyCollections = state.collections.filter(item => {
-        if (item.date === todayStr) return true;
-        if (item.date && item.date !== 'غير محدد') return false;
-        if (!item.timestamp) return false;
-        const enteredDate = new Date(Number(item.timestamp));
-        return !Number.isNaN(enteredDate.getTime()) &&
-          enteredDate.getFullYear() === new Date().getFullYear() &&
-          enteredDate.getMonth() === new Date().getMonth() &&
-          enteredDate.getDate() === new Date().getDate();
-      });
+      // التحصيل اليومي يعتمد حصرياً على تاريخ المعاملة المختار، وليس وقت إدخالها.
+      // نستبعد معاملات "غير معروف" والسجلات التي لا تحمل اسم موظف صالحاً.
+      const dailyCollections = state.collections.filter(item =>
+        item.date === todayStr &&
+        item.paymentType !== 'غير معروف' &&
+        typeof item.employeeName === 'string' &&
+        item.employeeName.trim() !== '' &&
+        item.employeeName.trim() !== 'غير معروف' &&
+        (Number(item.amount) || 0) > 0
+      );
 
       const dailyTotals = {};
       dailyCollections.forEach(item => {
-        const name = item.employeeName || 'غير معروف';
+        const name = item.employeeName.trim();
         dailyTotals[name] = (dailyTotals[name] || 0) + (Number(item.amount) || 0);
       });
       let dailyHero = null;
