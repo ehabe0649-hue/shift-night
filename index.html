@@ -203,10 +203,10 @@
     function checkCelebrationTime() {
       const now = new Date();
       const day = now.getDate();
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
       const hours = now.getHours();
       const minutes = now.getMinutes();
-      
-      if (day === 30 && (hours > 21 || (hours === 21 && minutes >= 30))) {
+      if (day === lastDayOfMonth && (hours > 21 || (hours === 21 && minutes >= 30))) {
         showCelebration();
       }
     }
@@ -230,6 +230,7 @@
       }
       
       overlay.classList.add('show');
+      playEventSong('month');
     }
 
     let state = {
@@ -250,7 +251,12 @@
       loginError: '',
       employeeSuccessMsg: '',
       isCloudConnected: false,
-      soundEnabled: localStorage.getItem('shift_night_sound') === 'true'
+      soundEnabled: localStorage.getItem('shift_night_sound') === 'true',
+      celebrationAudio: JSON.parse(localStorage.getItem('shift_night_celebration_audio') || 'null') || {
+        shiftEnabled: true, shiftSong: 'audio/song_1.mp3',
+        monthEnabled: true, monthSong: 'audio/song_2.mp3',
+        goalEnabled: true, goalSong: 'audio/song_3.mp3'
+      }
     };
 
     window.toggleSound = function() {
@@ -262,6 +268,80 @@
 
     let knownCollectionIds = null;
     let moneyAnnouncementTimer = null;
+    let celebrationAudioPlayer = null;
+    const CELEBRATION_SONGS = [
+      { value: 'audio/song_1.mp3', label: 'الأغنية الأولى' },
+      { value: 'audio/song_2.mp3', label: 'الأغنية الثانية' },
+      { value: 'audio/song_3.mp3', label: 'الأغنية الثالثة' },
+      { value: 'audio/song_4.mp3', label: 'الأغنية الرابعة' }
+    ];
+
+    function playEventSong(eventKey) {
+      const cfg = state.celebrationAudio || {};
+      const enabledKey = eventKey + 'Enabled';
+      const songKey = eventKey + 'Song';
+      if (!cfg[enabledKey] || !cfg[songKey]) return;
+      try {
+        if (celebrationAudioPlayer) {
+          celebrationAudioPlayer.pause();
+          celebrationAudioPlayer.currentTime = 0;
+        }
+        celebrationAudioPlayer = new Audio(cfg[songKey]);
+        celebrationAudioPlayer.volume = 0.85;
+        const playPromise = celebrationAudioPlayer.play();
+        if (playPromise && playPromise.catch) {
+          playPromise.catch(err => console.warn('Audio autoplay was blocked by the browser:', err));
+        }
+      } catch (err) { console.warn('Could not play celebration song:', err); }
+    }
+
+    window.previewCelebrationSong = function(eventKey) {
+      const select = document.getElementById(eventKey + 'SongSelect');
+      if (!select) return;
+      const cfg = state.celebrationAudio || {};
+      cfg[eventKey + 'Song'] = select.value;
+      state.celebrationAudio = cfg;
+      try {
+        if (celebrationAudioPlayer) celebrationAudioPlayer.pause();
+        celebrationAudioPlayer = new Audio(select.value);
+        celebrationAudioPlayer.volume = 0.85;
+        celebrationAudioPlayer.play().catch(() => alert('اضغط مرة أخرى بعد السماح بالصوت من المتصفح.'));
+      } catch (err) { alert('تعذر تشغيل معاينة الأغنية.'); }
+    };
+
+    window.stopCelebrationSong = function() {
+      if (celebrationAudioPlayer) {
+        celebrationAudioPlayer.pause();
+        celebrationAudioPlayer.currentTime = 0;
+      }
+    };
+
+    window.saveCelebrationAudioSettings = async function() {
+      const readToggle = id => !!document.getElementById(id)?.checked;
+      const readSong = id => document.getElementById(id)?.value || 'audio/song_1.mp3';
+      const cfg = {
+        shiftEnabled: readToggle('shiftAudioEnabled'), shiftSong: readSong('shiftSongSelect'),
+        monthEnabled: readToggle('monthAudioEnabled'), monthSong: readSong('monthSongSelect'),
+        goalEnabled: readToggle('goalAudioEnabled'), goalSong: readSong('goalSongSelect')
+      };
+      state.celebrationAudio = cfg;
+      localStorage.setItem('shift_night_celebration_audio', JSON.stringify(cfg));
+      if (!window.CloudDB || !window.CloudDB.db || !window.CloudDB.auth.currentUser) {
+        alert('تم حفظ الاختيارات على هذا الجهاز فقط لعدم اتصال Firebase. اتصل بالإنترنت ثم احفظ مرة أخرى لمشاركتها مع كل الموظفين.');
+        render();
+        return;
+      }
+      try {
+        const { db, appId, doc, setDoc } = window.CloudDB;
+        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'celebration_audio');
+        await setDoc(settingsRef, cfg, { merge: true });
+        alert('تم حفظ إعدادات الأغاني ومشاركتها مع كل الأجهزة المتصلة ✅');
+        render();
+      } catch (err) {
+        console.error('Saving celebration audio settings failed:', err);
+        alert('تعذر حفظ الإعدادات سحابيًا. راجع اتصال Firebase وحاول مرة أخرى.');
+      }
+    };
 
     function showMoneyAnnouncement(record) {
       const banner = document.getElementById('moneyAnnouncement');
@@ -321,6 +401,16 @@
           state.isCloudConnected = true;
           localStorage.setItem('shift_night_local_fallback', JSON.stringify(cloudData));
           render();
+        });
+
+        const audioSettingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'celebration_audio');
+        onSnapshot(audioSettingsRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const remoteAudio = docSnap.data();
+            state.celebrationAudio = { ...state.celebrationAudio, ...remoteAudio };
+            localStorage.setItem('shift_night_celebration_audio', JSON.stringify(state.celebrationAudio));
+          }
+          if (state.currentView === 'admin_dashboard' && state.isAdminLoggedIn) render();
         });
 
         const tickerDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'news_ticker');
@@ -650,6 +740,40 @@
               </div>
 
               <p class="text-xs text-slate-400 mt-2">Note: The ticker appears on all pages and is visible to all employees.</p>
+            </div>
+
+            <div class="glass-card p-6 rounded-3xl border border-emerald-500/30 space-y-4">
+              <div class="flex flex-wrap justify-between items-center gap-2">
+                <h3 class="text-sm font-black text-emerald-400">🎵 مكتبة الأغاني والتحكم في الاحتفالات</h3>
+                <span class="text-[11px] text-slate-400">الإعدادات تُزامَن مع أجهزة الموظفين عبر Firebase</span>
+              </div>
+              <p class="text-xs text-slate-400">اختار أغنية لكل مناسبة، جرّبها قبل الحفظ، وحدد إذا كانت مفعّلة أم لا.</p>
+              <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                ${[
+                  {key:'shift', title:'نهاية الشيفت', enabled:'shiftEnabled', song:'shiftSong'},
+                  {key:'month', title:'نهاية الشهر', enabled:'monthEnabled', song:'monthSong'},
+                  {key:'goal', title:'تحقيق الهدف الجماعي', enabled:'goalEnabled', song:'goalSong'}
+                ].map(item => `
+                  <div class="bg-slate-900/60 border border-slate-700 rounded-2xl p-4 space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="font-bold text-slate-100 text-sm">${item.title}</span>
+                      <label class="flex items-center gap-2 text-xs text-emerald-300">
+                        <input id="${item.key}AudioEnabled" type="checkbox" ${state.celebrationAudio[item.enabled] ? 'checked' : ''} class="accent-emerald-500 w-4 h-4">
+                        تشغيل
+                      </label>
+                    </div>
+                    <select id="${item.key}SongSelect" class="w-full bg-slate-950 border border-slate-700 text-slate-100 rounded-xl p-3 text-xs">
+                      ${CELEBRATION_SONGS.map(song => `<option value="${song.value}" ${state.celebrationAudio[item.song] === song.value ? 'selected' : ''}>${song.label}</option>`).join('')}
+                    </select>
+                    <button onclick="previewCelebrationSong('${item.key}')" class="w-full bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2.5 rounded-xl">▶ تجربة الأغنية</button>
+                  </div>
+                `).join('')}
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button onclick="saveCelebrationAudioSettings()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-5 py-3 rounded-xl">💾 حفظ إعدادات الأغاني</button>
+                <button onclick="stopCelebrationSong()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-4 py-3 rounded-xl">⏹ إيقاف الأغنية</button>
+              </div>
+              <p class="text-[11px] text-amber-300">ملاحظة: الأغاني محفوظة كملفات داخل الموقع؛ ارفع مجلد audio مع ملف index.html إلى GitHub حتى تعمل على كل الأجهزة.</p>
             </div>
 
             <div class="glass-card p-6 rounded-3xl space-y-4">
