@@ -754,33 +754,79 @@
 
     function renderSharedGoalBanner() {
       const cfg = state.celebrationAudio || {};
-      const target = Number(cfg.goalTarget) || 0;
-      if (!cfg.goalEnabled || target <= 0) return '';
-      const total = getDailyTotal();
-      const remaining = Math.max(0, target - total);
-      const percent = Math.min(100, Math.round((total / target) * 100));
-      const reached = total >= target;
-      return `
-        <section class="glass-card p-5 sm:p-6 rounded-3xl border ${reached ? 'border-emerald-400/60' : 'border-amber-500/30'} mb-6">
-          <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <div>
-              <h2 class="text-lg sm:text-xl font-black text-amber-300">🎯 هدفنا الجماعي النهارده</h2>
-              <p class="text-xs text-slate-400 mt-1">هدف واحد للفريق كله — كل تحصيل بيقرّبنا من الوصول</p>
+      const cards = [];
+
+      // الهدف الجماعي: يظهر لكل الموظفين كما كان.
+      const groupTarget = Number(cfg.goalTarget) || 0;
+      if (cfg.goalEnabled && groupTarget > 0) {
+        const total = getDailyTotal();
+        const remaining = Math.max(0, groupTarget - total);
+        const percent = Math.min(100, Math.round((total / groupTarget) * 100));
+        const reached = total >= groupTarget;
+        cards.push(`
+          <section class="glass-card p-5 sm:p-6 rounded-3xl border ${reached ? 'border-emerald-400/60' : 'border-amber-500/30'}">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <div>
+                <h2 class="text-lg sm:text-xl font-black text-amber-300">🎯 هدفنا الجماعي النهارده</h2>
+                <p class="text-xs text-slate-400 mt-1">هدف واحد للفريق كله — كل تحصيل بيقرّبنا من الوصول</p>
+              </div>
+              <span class="text-xs font-black px-3 py-2 rounded-full ${reached ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}">${reached ? '🏆 وصلنا للهدف!' : '💪 شغالين عليه'}</span>
             </div>
-            <span class="text-xs font-black px-3 py-2 rounded-full ${reached ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}">${reached ? '🏆 وصلنا للهدف!' : '💪 شغالين عليه'}</span>
-          </div>
-          <div class="flex flex-wrap items-end justify-between gap-2 mb-3">
-            <div class="text-2xl sm:text-3xl font-black text-emerald-300 tabular-nums">${formatCurrency(total)} <span class="text-sm text-slate-400">ج.م</span></div>
-            <div class="text-sm font-bold text-slate-200">من ${formatCurrency(target)} ج.م</div>
-          </div>
-          <div class="w-full h-3 rounded-full bg-slate-800 overflow-hidden border border-slate-700">
-            <div class="h-full rounded-full ${reached ? 'bg-emerald-400' : 'bg-gradient-to-r from-amber-500 to-emerald-400'} transition-all duration-500" style="width:${percent}%"></div>
-          </div>
-          <div class="flex justify-between gap-3 mt-2 text-xs">
-            <span class="font-bold text-emerald-300">${percent}% تحقق</span>
-            <span class="text-slate-400">${reached ? 'أحسنتم! تم تحقيق الهدف الجماعي 🎉' : `متبقي ${formatCurrency(remaining)} ج.م`}</span>
-          </div>
-        </section>`;
+            <div class="flex flex-wrap items-end justify-between gap-2 mb-3">
+              <div class="text-2xl sm:text-3xl font-black text-emerald-300 tabular-nums">${formatCurrency(total)} <span class="text-sm text-slate-400">ج.م</span></div>
+              <div class="text-sm font-bold text-slate-200">من ${formatCurrency(groupTarget)} ج.م</div>
+            </div>
+            <div class="w-full h-3 rounded-full bg-slate-800 overflow-hidden border border-slate-700">
+              <div class="h-full rounded-full ${reached ? 'bg-emerald-400' : 'bg-gradient-to-r from-amber-500 to-emerald-400'} transition-all duration-500" style="width:${percent}%"></div>
+            </div>
+            <div class="flex justify-between gap-3 mt-2 text-xs">
+              <span class="font-bold text-emerald-300">${percent}% تحقق</span>
+              <span class="text-slate-400">${reached ? 'أحسنتم! تم تحقيق الهدف الجماعي 🎉' : `متبقي ${formatCurrency(remaining)} ج.م`}</span>
+            </div>
+          </section>`);
+      }
+
+      // الهدف الفردي: يعرض تقدم كل موظف للجميع، ولا يعتمد على وضع الاحتفال تلقائي/يدوي.
+      const individualTarget = Number(cfg.individualTarget) || 0;
+      if (cfg.individualEnabled && individualTarget > 0) {
+        const progress = {};
+        state.collections.filter(c => c.date === getTodayString()).forEach(c => {
+          const name = String(c.employeeName || '').trim();
+          if (!name || name === 'غير معروف' || name === 'غير محدد') return;
+          progress[name] = (progress[name] || 0) + (Number(c.amount) || 0);
+        });
+        const rows = Object.entries(progress).filter(([, amount]) => amount > 0)
+          .map(([name, amount]) => ({ name, amount, percent: Math.min(100, Math.round(amount / individualTarget * 100)) }))
+          .sort((a, b) => b.amount - a.amount);
+        cards.push(`
+          <section class="glass-card p-5 sm:p-6 rounded-3xl border border-violet-500/40">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+              <div>
+                <h2 class="text-lg sm:text-xl font-black text-violet-300">🏅 التحدي الفردي النهارده</h2>
+                <p class="text-xs text-slate-400 mt-1">كل موظف بيحقق هدفه بنفسه — ورّونا مين هيكون بطل النهارده!</p>
+              </div>
+              <span class="text-xs font-black px-3 py-2 rounded-full bg-violet-500/15 text-violet-300">هدف كل موظف: ${formatCurrency(individualTarget)} ج.م</span>
+            </div>
+            ${rows.length ? `
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                ${rows.map(person => `
+                  <div class="rounded-2xl bg-slate-900/70 border ${person.amount >= individualTarget ? 'border-emerald-400/50' : 'border-slate-700'} p-3">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                      <span class="font-bold text-sm text-white truncate">${person.name}</span>
+                      <span class="text-xs font-black ${person.amount >= individualTarget ? 'text-emerald-300' : 'text-violet-200'}">${person.amount >= individualTarget ? '🏆 حقق الهدف' : `${person.percent}%`}</span>
+                    </div>
+                    <div class="text-sm font-black text-emerald-300 mb-2">${formatCurrency(person.amount)} <span class="text-xs text-slate-400">ج.م</span></div>
+                    <div class="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                      <div class="h-full rounded-full ${person.amount >= individualTarget ? 'bg-emerald-400' : 'bg-violet-400'} transition-all duration-500" style="width:${person.percent}%"></div>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-2">${person.amount >= individualTarget ? 'مبروك! التحدي اتحقق 🎉' : `متبقي ${formatCurrency(individualTarget - person.amount)} ج.م`}</p>
+                  </div>`).join('')}
+              </div>
+            ` : '<p class="text-sm text-slate-400">التحدي بدأ! أول ما يتسجل تحصيل بتاريخ النهارده هيظهر تقدم الموظف هنا.</p>'}
+          </section>`);
+      }
+
+      return cards.length ? `<div class="space-y-5 mb-6">${cards.join('')}</div>` : '';
     }
 
     function renderHero() {
