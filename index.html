@@ -93,7 +93,7 @@
     <div class="text-4xl sm:text-6xl font-black text-emerald-400 mb-8 bg-slate-800/50 p-6 rounded-3xl border-2 border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
       <span id="celebrationTotal">0</span> <span class="text-xl text-slate-400">EGP</span>
     </div>
-    <div id="celebrationBreakdown" class="hidden w-full max-w-3xl max-h-56 overflow-y-auto mb-6 rounded-2xl border border-emerald-500/30 bg-slate-900/70 p-3 text-sm"></div>
+    <div id="celebrationBreakdown" class="hidden w-full max-w-5xl mb-6 rounded-2xl border border-emerald-500/30 bg-slate-900/70 p-3 text-sm"></div>
     <div class="flex gap-4 mb-8">
       <div class="relative">
          <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-amber-500 overflow-hidden bg-slate-800 flex items-center justify-center">
@@ -212,7 +212,7 @@
     }
     window.closeCelebration = closeCelebration;
 
-    function showTeamCelebration(title, subtitle, total, eventKey, message) {
+    function showTeamCelebration(title, subtitle, total, eventKey, message, featuredWinners = []) {
       const overlay = document.getElementById('celebrationOverlay');
       if (!overlay) return;
       document.getElementById('celebrationTitle').textContent = title;
@@ -224,17 +224,26 @@
       const secondImg = overlay.querySelectorAll('img')[1];
       if (secondImg) secondImg.style.display = 'none';
       const messageEl = overlay.querySelector('p.italic');
-      if (messageEl) messageEl.textContent = message || 'كل جنيه اتحصل وراه مجهود… شكرًا يا أبطال! 💚';
+      const encouragements = [
+        'كل جنيه اتحصل وراه مجهود… شكرًا يا أبطال! 💚',
+        'النهارده إنجاز، وبكرة إنجاز أكبر… كملوا بنفس القوة! 🚀',
+        'كل واحد فيكم فارق… ومجهودكم هو سر نجاح الفريق! 🏆',
+        'إنتوا مش بس بتحققوا أرقام، إنتوا بتصنعوا نجاح! 👏',
+        'خطوة ورا خطوة بنوصل… ولسه اللي جاي أقوى! 🔥'
+      ];
+      if (messageEl) messageEl.textContent = message || encouragements[Math.floor(Math.random() * encouragements.length)];
       const dailyByEmployee = {};
       state.collections.filter(c => c.date === getTodayString()).forEach(c => {
         const name = c.employeeName || 'غير محدد';
         dailyByEmployee[name] = (dailyByEmployee[name] || 0) + (Number(c.amount) || 0);
       });
-      const breakdown = Object.entries(dailyByEmployee).filter(([, amount]) => amount > 0).sort((a,b) => b[1]-a[1]);
+      const breakdown = featuredWinners.length
+        ? featuredWinners.map(w => [w.name, Number(w.total) || 0])
+        : Object.entries(dailyByEmployee).filter(([, amount]) => amount > 0).sort((a,b) => b[1]-a[1]);
       const breakdownEl = document.getElementById('celebrationBreakdown');
       if (breakdownEl) {
         breakdownEl.innerHTML = breakdown.length
-          ? `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${breakdown.map(([name, amount], i) => `<div class="flex justify-between gap-3 rounded-xl bg-slate-800/80 px-3 py-2"><span class="font-bold text-slate-100">${i+1}. ${name}</span><span class="font-black text-emerald-300 whitespace-nowrap">${formatCurrency(amount)} ج.م</span></div>`).join('')}</div>`
+          ? `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">${breakdown.map(([name, amount], i) => `<div class="flex justify-between gap-3 rounded-xl bg-slate-800/80 px-3 py-2"><span class="font-bold text-slate-100">${i+1}. ${name}</span><span class="font-black text-emerald-300 whitespace-nowrap">${formatCurrency(amount)} ج.م</span></div>`).join('')}</div>`
           : '<p class="text-slate-400">لسه مفيش تحصيلات مسجلة النهارده.</p>';
         breakdownEl.classList.remove('hidden');
       }
@@ -267,6 +276,82 @@
         showTeamCelebration('🏆 حققنا الهدف الجماعي!', `الهدف المحدد: ${formatCurrency(target)} جنيه — إنجاز عظيم!`, total, 'goal', 'لما بنشتغل كفريق… مفيش هدف بعيد! 👏');
       }
     }
+    function getIndividualGoalWinners() {
+      const target = Number(state.celebrationAudio?.individualTarget) || 0;
+      if (target <= 0) return [];
+      const totals = {};
+      state.collections.filter(c => c.date === getTodayString()).forEach(c => {
+        const name = String(c.employeeName || '').trim();
+        if (!name || name === 'غير معروف' || name === 'غير محدد') return;
+        totals[name] = (totals[name] || 0) + (Number(c.amount) || 0);
+      });
+      return Object.entries(totals).filter(([, total]) => total >= target)
+        .map(([name, total]) => ({ name, total }))
+        .sort((a, b) => b.total - a.total);
+    }
+
+    async function publishCelebrationEvent(eventData) {
+      if (!window.CloudDB?.db || !window.CloudDB?.auth?.currentUser) {
+        throw new Error('Firebase غير متصل؛ لا يمكن مزامنة الاحتفال مع كل الأجهزة.');
+      }
+      const { db, appId, doc, setDoc } = window.CloudDB;
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'celebration_event'), eventData);
+    }
+
+    function checkIndividualGoal() {
+      const cfg = state.celebrationAudio || {};
+      // الاحتفال التلقائي يحدث مرة واحدة فقط في اليوم، ويضم كل من حقق الهدف حتى لحظة تشغيله.
+      // أي موظف يحقق الهدف بعد ذلك يظل ظاهرًا في قائمة المدير ويمكن الاحتفال به يدويًا.
+      if (!state.isAdminLoggedIn || !cfg.individualEnabled || cfg.individualMode !== 'auto') return;
+      const target = Number(cfg.individualTarget) || 0;
+      if (target <= 0) return;
+      const key = `shift_night_individual_auto_celebrated_${getTodayString()}`;
+      if (localStorage.getItem(key)) return;
+      const winners = getIndividualGoalWinners();
+      if (!winners.length) return;
+      // امنع التكرار فورًا أثناء انتظار استجابة Firebase، مع إتاحة إعادة المحاولة عند الفشل.
+      localStorage.setItem(key, 'pending');
+      publishCelebrationEvent({
+        eventKey: 'individual', date: getTodayString(), timestamp: Date.now(),
+        title: winners.length === 1 ? `🏆 برافو يا ${winners[0].name}!` : '🏆 أبطال التحدي الفردي!',
+        subtitle: `حقق ${winners.length} موظف${winners.length === 1 ? '' : 'ين'} الهدف الفردي ${formatCurrency(target)} جنيه`,
+        total: winners.reduce((sum, winner) => sum + winner.total, 0), winners,
+        message: 'تعبكم جاب نتيجة… تستاهلوا كل التصفيق! 👏'
+      }).then(() => {
+        localStorage.setItem(key, '1');
+      }).catch(err => {
+        localStorage.removeItem(key);
+        console.warn('Individual celebration event failed:', err);
+      });
+    }
+
+    window.runSelectedIndividualCelebration = async function() {
+      if (!state.isAdminLoggedIn) return alert('التحكم متاح للمدير فقط.');
+      const selected = [...document.querySelectorAll('.individual-winner-check:checked')].map(el => el.value);
+      if (!selected.length) return alert('اختار موظف واحد على الأقل.');
+      const winners = getIndividualGoalWinners().filter(w => selected.includes(w.name));
+      if (!winners.length) return alert('لا يوجد موظفون مختارون حققوا الهدف حتى الآن.');
+      const target = Number(state.celebrationAudio?.individualTarget) || 0;
+      try {
+        await publishCelebrationEvent({
+          eventKey: 'individual', date: getTodayString(), timestamp: Date.now(),
+          title: '🏆 أبطال التحدي الفردي!', subtitle: `الهدف الفردي: ${formatCurrency(target)} جنيه`,
+          total: winners.reduce((sum, w) => sum + w.total, 0), winners,
+          message: 'كل واحد فيكم أثبت إن الاجتهاد بيصنع الفرق! 💪'
+        });
+        alert('تم إرسال الاحتفال للفائزين المختارين على كل الأجهزة.');
+      } catch (e) { alert('تعذر إرسال الاحتفال. تأكد من اتصال Firebase.'); }
+    };
+
+    window.stopCelebrationForAll = async function() {
+      if (!state.isAdminLoggedIn) return alert('الإيقاف العام متاح للمدير فقط.');
+      try {
+        await publishCelebrationEvent({ eventKey: 'stop', date: getTodayString(), timestamp: Date.now() });
+        closeCelebration();
+        alert('تم إيقاف الاحتفال والأغنية عند جميع الموظفين.');
+      } catch (e) { alert('تعذر إرسال أمر الإيقاف.'); }
+    };
+
     window.triggerShiftCelebration = async function() {
       if (!state.isAdminLoggedIn) return alert('الزر ده متاح للمدير فقط.');
       if (!state.celebrationAudio?.shiftEnabled) return alert('احتفال نهاية الوردية متوقف من إعدادات المدير.');
@@ -283,6 +368,7 @@
     function checkCelebrationTime() {
       checkDailyCelebration();
       checkGroupGoal();
+      checkIndividualGoal();
       const now = new Date();
       const day = now.getDate();
       const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -343,6 +429,7 @@
         dailyEnabled: true, dailySong: 'audio/song_4.mp3',
         monthEnabled: true, monthSong: 'audio/song_2.mp3',
         goalEnabled: true, goalSong: 'audio/song_3.mp3', goalTarget: 0,
+        individualEnabled: false, individualTarget: 10000, individualMode: 'auto', individualSong: 'audio/song_3.mp3',
         ...(JSON.parse(localStorage.getItem('shift_night_celebration_audio') || 'null') || {})
       }
     };
@@ -358,16 +445,34 @@
     let moneyAnnouncementTimer = null;
     let celebrationAudioPlayer = null;
     const CELEBRATION_SONGS = [
-      { value: 'audio/song_1.mp3', label: 'الأغنية الأولى' },
-      { value: 'audio/song_2.mp3', label: 'الأغنية الثانية' },
-      { value: 'audio/song_3.mp3', label: 'الأغنية الثالثة' },
-      { value: 'audio/song_4.mp3', label: 'الأغنية الرابعة' }
+      { value: 'audio/song_1.mp3', label: 'الأغنية القديمة 1' },
+      { value: 'audio/song_2.mp3', label: 'الأغنية القديمة 2' },
+      { value: 'audio/song_3.mp3', label: 'الأغنية القديمة 3' },
+      { value: 'audio/song_4.mp3', label: 'الأغنية القديمة 4' },
+      { value: 'audio/song_5.mp3', label: '5 على الفريق' },
+      { value: 'audio/song_6.mp3', label: 'البحراوي 2' },
+      { value: 'audio/song_7.mp3', label: 'الحريفة 2' },
+      { value: 'audio/song_8.mp3', label: 'الحريفة' },
+      { value: 'audio/song_9.mp3', label: 'الحظ لعبها صح' },
+      { value: 'audio/song_10.mp3', label: 'القضية ممكن' },
+      { value: 'audio/song_11.mp3', label: 'أنت الإنجاز' },
+      { value: 'audio/song_12.mp3', label: 'بحراوي' },
+      { value: 'audio/song_13.mp3', label: 'بهاء سلطان' },
+      { value: 'audio/song_14.mp3', label: 'ساعات' },
+      { value: 'audio/song_15.mp3', label: 'سقفة ورا سقفة' },
+      { value: 'audio/song_16.mp3', label: 'عادل إمام' },
+      { value: 'audio/song_17.mp3', label: 'عاش بطل' },
+      { value: 'audio/song_18.mp3', label: 'عسيلي' },
+      { value: 'audio/song_19.mp3', label: 'لما نحب عملنا' },
+      { value: 'audio/song_20.mp3', label: 'نمبر 1' },
+      { value: 'audio/song_21.mp3', label: 'هي مش مجهود' },
+      { value: 'audio/song_22.mp3', label: 'وحياة قلبي' }
     ];
 
     function playEventSong(eventKey) {
       const cfg = state.celebrationAudio || {};
-      const enabledKey = eventKey + 'Enabled';
-      const songKey = eventKey + 'Song';
+      const enabledKey = eventKey === 'individual' ? 'individualEnabled' : eventKey + 'Enabled';
+      const songKey = eventKey === 'individual' ? 'individualSong' : eventKey + 'Song';
       if (!cfg[enabledKey] || !cfg[songKey]) return;
       try {
         if (celebrationAudioPlayer) {
@@ -412,7 +517,11 @@
         dailyEnabled: readToggle('dailyAudioEnabled'), dailySong: readSong('dailySongSelect'),
         monthEnabled: readToggle('monthAudioEnabled'), monthSong: readSong('monthSongSelect'),
         goalEnabled: readToggle('goalAudioEnabled'), goalSong: readSong('goalSongSelect'),
-        goalTarget: Math.max(0, Number(document.getElementById('goalTargetInput')?.value || 0))
+        goalTarget: Math.max(0, Number(document.getElementById('goalTargetInput')?.value || 0)),
+        individualEnabled: readToggle('individualAudioEnabled'),
+        individualTarget: Math.max(0, Number(document.getElementById('individualTargetInput')?.value || 0)),
+        individualMode: document.getElementById('individualModeSelect')?.value || 'auto',
+        individualSong: readSong('individualSongSelect')
       };
       state.celebrationAudio = cfg;
       localStorage.setItem('shift_night_celebration_audio', JSON.stringify(cfg));
@@ -491,6 +600,7 @@
           state.collections = cloudData;
           state.isCloudConnected = true;
           checkGroupGoal();
+          checkIndividualGoal();
           localStorage.setItem('shift_night_local_fallback', JSON.stringify(cloudData));
           render();
         });
@@ -514,8 +624,14 @@
           const seenKey = 'shift_night_shift_event_seen_' + event.timestamp;
           if (localStorage.getItem(seenKey)) return;
           localStorage.setItem(seenKey, '1');
+          if (event.eventKey === 'stop') {
+            closeCelebration();
+            return;
+          }
           if (event.eventKey === 'shift' && state.celebrationAudio?.shiftEnabled) {
             showTeamCelebration('🌙 نهاية وردية سعيدة!', 'إجمالي تحصيل الفريق اليوم:', getDailyTotal(), 'shift', 'شكرًا على تعبكم ومجهودكم النهارده يا أبطال!');
+          } else if (event.eventKey === 'individual' && state.celebrationAudio?.individualEnabled) {
+            showTeamCelebration(event.title || '🏆 أبطال التحدي الفردي!', event.subtitle || 'تحقق الهدف الفردي', event.total || 0, 'individual', event.message, event.winners || []);
           }
         });
 
@@ -670,6 +786,14 @@
     function renderHero() {
       const todayStr = getTodayString();
       const monthStr = todayStr.slice(0, 7);
+      const openingQuotes = [
+        'Champions keep playing until they get it right. Keep going! 🚀',
+        'كل يوم فرصة جديدة نثبت فيها إننا أبطال! 💪',
+        'النجاح مش صدفة… النجاح نتيجة تعب وإصرار! 🏆',
+        'ابدأ بقوة، كمل بعزيمة، واختم بانتصار! 🔥',
+        'فريق واحد، هدف واحد، ونجاح مستمر! 💚'
+      ];
+      const openingQuote = openingQuotes[(new Date().getDate() + new Date().getMonth()) % openingQuotes.length];
       let monthlySection = '';
 
       // أبطال التحصيل الشهري: أعلى إجمالي وأعلى ثاني إجمالي، بالصور فقط.
@@ -704,20 +828,22 @@
           </section>`;
       }
 
-      // التحصيل اليومي يعتمد حصرياً على تاريخ المعاملة المختار، وليس وقت إدخالها.
-      // نستبعد معاملات "غير معروف" والسجلات التي لا تحمل اسم موظف صالحاً.
-      const dailyCollections = state.collections.filter(item =>
-        item.date === todayStr &&
-        item.paymentType !== 'غير معروف' &&
-        typeof item.employeeName === 'string' &&
-        item.employeeName.trim() !== '' &&
-        item.employeeName.trim() !== 'غير معروف' &&
-        (Number(item.amount) || 0) > 0
-      );
+      // أول تحصيل يومي يظل مستقلاً ويظهر طوال الشهر، ولا يتوقف يوم 21.
+      // نعتمد على تاريخ المعاملة، ونستخدم timestamp كاحتياط للسجلات التي لا تحتوي تاريخاً صالحاً.
+      const dailyCollections = state.collections.filter(item => {
+        if (item.date === todayStr) return true;
+        if (item.date && item.date !== 'غير محدد') return false;
+        if (!item.timestamp) return false;
+        const enteredDate = new Date(Number(item.timestamp));
+        return !Number.isNaN(enteredDate.getTime()) &&
+          enteredDate.getFullYear() === new Date().getFullYear() &&
+          enteredDate.getMonth() === new Date().getMonth() &&
+          enteredDate.getDate() === new Date().getDate();
+      });
 
       const dailyTotals = {};
       dailyCollections.forEach(item => {
-        const name = item.employeeName.trim();
+        const name = item.employeeName || 'غير معروف';
         dailyTotals[name] = (dailyTotals[name] || 0) + (Number(item.amount) || 0);
       });
       let dailyHero = null;
@@ -740,7 +866,7 @@
               <p class="text-amber-400 font-bold text-sm mb-1 uppercase tracking-wider">أعلى تحصيل لليوم</p>
               <h2 class="text-3xl font-black text-white mb-2" dir="ltr">${dailyHero.name}</h2>
               <p class="text-emerald-400 font-black text-xl mb-3" dir="ltr">${formatCurrency(dailyHero.amount)} EGP</p>
-              <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">"Champions keep playing until they get it right. Keep going! 🚀"</p>
+              <p class="text-slate-300 font-bold italic text-sm bg-slate-800/50 inline-block px-4 py-1.5 rounded-xl border border-slate-700">${openingQuote}</p>
             </div>
           </div>
         </div>`;
@@ -911,10 +1037,34 @@
                 <input id="goalTargetInput" type="number" min="0" step="100" value="${Number(state.celebrationAudio.goalTarget) || 0}" placeholder="مثال: 50000" class="w-full sm:w-80 bg-slate-950 border border-slate-700 text-white rounded-xl p-3 text-sm" />
                 <p class="text-xs text-slate-400">عند وصول إجمالي تحصيل اليوم للهدف، يظهر الاحتفال تلقائيًا مرة واحدة في اليوم إذا كان مفعّلًا.</p>
               </div>
+              <div class="bg-slate-900/60 border border-violet-500/30 rounded-2xl p-4 space-y-3">
+                <h4 class="font-black text-violet-300">🏅 التحدي الفردي اليومي</h4>
+                <label class="flex items-center gap-2 text-sm text-slate-200"><input id="individualAudioEnabled" type="checkbox" ${state.celebrationAudio.individualEnabled ? 'checked' : ''} class="accent-violet-500"> تفعيل التحدي الفردي</label>
+                <label class="block text-xs text-slate-300">قيمة الهدف لكل موظف (جنيه)</label>
+                <input id="individualTargetInput" type="number" min="0" step="100" value="${Number(state.celebrationAudio.individualTarget) || 10000}" class="w-full sm:w-80 bg-slate-950 border border-slate-700 text-white rounded-xl p-3 text-sm">
+                <label class="block text-xs text-slate-300">طريقة الاحتفال</label>
+                <select id="individualModeSelect" class="w-full sm:w-80 bg-slate-950 border border-slate-700 text-white rounded-xl p-3 text-sm">
+                  <option value="auto" ${state.celebrationAudio.individualMode === 'auto' ? 'selected' : ''}>تلقائي لكل من يحقق الهدف</option>
+                  <option value="manual" ${state.celebrationAudio.individualMode === 'manual' ? 'selected' : ''}>يدوي — المدير يختار الفائزين</option>
+                </select>
+                <label class="block text-xs text-slate-300">أغنية التحدي الفردي</label>
+                <select id="individualSongSelect" class="w-full sm:w-80 bg-slate-950 border border-slate-700 text-white rounded-xl p-3 text-sm">
+                  ${CELEBRATION_SONGS.map(song => `<option value="${song.value}" ${state.celebrationAudio.individualSong === song.value ? 'selected' : ''}>${song.label}</option>`).join('')}
+                </select>
+                <button onclick="previewCelebrationSong('individual')" class="bg-slate-700 text-white text-xs font-bold py-2 px-4 rounded-xl">▶ تجربة أغنية التحدي</button>
+                <div class="border-t border-slate-700 pt-3">
+                  <p class="text-sm font-bold text-slate-200 mb-2">الموظفون الذين حققوا الهدف اليوم:</p>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-56 overflow-y-auto">
+                    ${getIndividualGoalWinners().length ? getIndividualGoalWinners().map(w => `<label class="flex items-center gap-2 rounded-xl bg-slate-800 p-3 text-sm"><input type="checkbox" class="individual-winner-check accent-violet-500" value="${w.name.replace(/"/g, '&quot;')}"><img src="${getEmployeeImage(w.name)}" class="w-10 h-10 rounded-full object-cover" onerror="this.style.display='none'"><span class="font-bold">${w.name}<small class="block text-emerald-300">${formatCurrency(w.total)} ج.م</small></span></label>`).join('') : '<p class="text-xs text-slate-400">لم يحقق أي موظف الهدف حتى الآن.</p>'}
+                  </div>
+                  <button onclick="runSelectedIndividualCelebration()" class="mt-3 bg-violet-600 hover:bg-violet-500 text-white text-xs font-black px-4 py-3 rounded-xl">🎉 احتفل بالمختارين</button>
+                </div>
+              </div>
               <div class="flex flex-wrap gap-2">
                 <button onclick="saveCelebrationAudioSettings()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-5 py-3 rounded-xl">💾 حفظ إعدادات الأغاني</button>
                 <button onclick="stopCelebrationSong()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-4 py-3 rounded-xl">⏹ إيقاف الأغنية</button>
                 <button onclick="triggerShiftCelebration()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black px-4 py-3 rounded-xl">🌙 تشغيل احتفال نهاية الوردية الآن</button>
+                <button onclick="stopCelebrationForAll()" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-black px-4 py-3 rounded-xl">⛔ إيقاف الاحتفال عند الجميع</button>
               </div>
               <p class="text-[11px] text-amber-300">ملاحظة: الأغاني محفوظة كملفات داخل الموقع؛ ارفع مجلد audio مع ملف index.html إلى GitHub حتى تعمل على كل الأجهزة.</p>
             </div>
