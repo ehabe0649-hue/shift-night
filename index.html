@@ -123,6 +123,19 @@
     ];
 
     const getTodayString = () => { const d = new Date(); const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${day}`; };
+    // السجلات التي لا تملك تاريخ تحصيل (مثل نوع "غير معروف") لا تدخل في تحصيل اليوم.
+    // لكنها تظل ضمن إجمالي الشهر اعتمادًا على وقت تسجيلها.
+    const isUndatedRecordInMonth = (item, monthStr) => {
+      if (!item || (item.date && item.date !== 'غير محدد')) return false;
+      if (!item.timestamp) return false;
+      const enteredDate = new Date(Number(item.timestamp));
+      return !Number.isNaN(enteredDate.getTime()) &&
+        `${enteredDate.getFullYear()}-${String(enteredDate.getMonth() + 1).padStart(2, '0')}` === monthStr;
+    };
+    const isInMonthTotal = (item, monthStr) =>
+      (typeof item.date === 'string' && item.date.startsWith(monthStr)) ||
+      isUndatedRecordInMonth(item, monthStr);
+
     const formatCurrency = (val) => (Number(val) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const getEmployeeImage = (name) => `https://raw.githubusercontent.com/ehabe0649-hue/shift-night/main/${name.replace(/ /g, '_')}.jpg`;
 
@@ -174,8 +187,8 @@
       const monthStr = getTodayString().slice(0, 7);
 
       let isMonthlyMode = dayOfMonth >= 21;
-      let relevantCollections = isMonthlyMode 
-        ? state.collections.filter(c => c.date.startsWith(monthStr))
+      let relevantCollections = isMonthlyMode
+        ? state.collections.filter(c => isInMonthTotal(c, monthStr))
         : state.collections.filter(c => c.date === todayStr);
 
       if (relevantCollections.length === 0 && dayOfMonth !== 30) return null;
@@ -385,7 +398,7 @@
       if (overlay.classList.contains('show')) return;
 
       const monthStr = getTodayString().slice(0, 7);
-      const monthlyTotal = state.collections.filter(c => c.date.startsWith(monthStr)).reduce((acc, curr) => acc + curr.amount, 0);
+      const monthlyTotal = state.collections.filter(c => isInMonthTotal(c, monthStr)).reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
       
       const hero = getHeroData();
       
@@ -844,9 +857,7 @@
 
       // أبطال التحصيل الشهري: أعلى إجمالي وأعلى ثاني إجمالي، بالصور فقط.
       if (new Date().getDate() >= 21) {
-        const monthlyItems = state.collections.filter(item =>
-          typeof item.date === 'string' && item.date.startsWith(monthStr)
-        );
+        const monthlyItems = state.collections.filter(item => isInMonthTotal(item, monthStr));
         const byEmployee = {};
         monthlyItems.forEach(item => {
           const name = item.employeeName || 'غير معروف';
@@ -874,18 +885,10 @@
           </section>`;
       }
 
-      // أول تحصيل يومي يظل مستقلاً ويظهر طوال الشهر، ولا يتوقف يوم 21.
-      // نعتمد على تاريخ المعاملة، ونستخدم timestamp كاحتياط للسجلات التي لا تحتوي تاريخاً صالحاً.
-      const dailyCollections = state.collections.filter(item => {
-        if (item.date === todayStr) return true;
-        if (item.date && item.date !== 'غير محدد') return false;
-        if (!item.timestamp) return false;
-        const enteredDate = new Date(Number(item.timestamp));
-        return !Number.isNaN(enteredDate.getTime()) &&
-          enteredDate.getFullYear() === new Date().getFullYear() &&
-          enteredDate.getMonth() === new Date().getMonth() &&
-          enteredDate.getDate() === new Date().getDate();
-      });
+      // التحصيل اليومي يعتمد على تاريخ التحصيل الفعلي فقط.
+      // أي سجل تاريخه "غير محدد" لا يظهر في أبطال اليوم حتى لو أُدخل اليوم.
+      // يظل هذا السجل محسوبًا في إجمالي الشهر اعتمادًا على وقت تسجيله.
+      const dailyCollections = state.collections.filter(item => item.date === todayStr);
 
       const dailyTotals = {};
       dailyCollections.forEach(item => {
@@ -1234,7 +1237,7 @@
         }
         if (state.dateRangeFilter === 'today') return item.date === todayStr;
         if (state.dateRangeFilter === 'specific_day') return item.date === state.specificDate;
-        if (state.dateRangeFilter === 'month') return item.date.startsWith(state.specificMonth);
+        if (state.dateRangeFilter === 'month') return isInMonthTotal(item, state.specificMonth);
         return true;
       });
     }
